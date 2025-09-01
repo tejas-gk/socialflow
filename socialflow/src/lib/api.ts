@@ -91,6 +91,44 @@ export interface PostHistoryResponse {
   }
 }
 
+export type UploadedFileInfo = {
+  id: string
+  url: string
+  name: string
+  type: string
+  size: number
+}
+
+export type UploadResponse = {
+  files: UploadedFileInfo[]
+}
+
+/**
+ * Upload media files to the Next.js in-memory upload API.
+ * Returns short-lived public URLs suitable for Meta image_url/video_url fields.
+ */
+export async function uploadMedia(files: File[]) {
+  // Upload files one by one following official approach
+  const uploadedFiles = [];
+
+  for (const file of files) {
+    const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      body: file, // send raw file in body
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to upload media");
+    }
+
+    const data = await response.json();
+    uploadedFiles.push(data);
+  }
+
+  return { files: uploadedFiles };
+}
+
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
@@ -141,7 +179,7 @@ class ApiClient {
     try {
       return this.request<FacebookPage>("/auth/facebook/selected-page")
     } catch (error) {
-      console.error('No Facebook page selected:', error)
+      console.error("No Facebook page selected:", error)
       return null
     }
   }
@@ -150,7 +188,7 @@ class ApiClient {
     try {
       return this.request<InstagramAccount>("/auth/instagram/selected-account")
     } catch (error) {
-      console.error('No Instagram account selected:', error)
+      console.error("No Instagram account selected:", error)
       return null
     }
   }
@@ -194,6 +232,30 @@ class ApiClient {
     })
   }
 
+  async postToMultiplePlatformsMultipart(postRequest: PostRequest, files: File[]) {
+    const form = new FormData()
+    form.append("payload", JSON.stringify(postRequest))
+    files.forEach((f) => form.append("files", f, f.name))
+
+    const url = `${API_BASE_URL}/api/social/post-multipart`
+    console.log("[v0] API Multipart Request:", { url, files: files.length })
+
+    const response = await fetch(url, {
+      method: "POST",
+      // Do not set Content-Type; browser will set multipart boundary
+      body: form,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] API Multipart Error Response:", errorText)
+      throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+    const data = await response.json()
+    console.log("[v0] API Multipart Response Data:", data)
+    return data
+  }
+
   // Analytics methods
   async getAnalyticsOverview(): Promise<AnalyticsOverview> {
     return this.request<AnalyticsOverview>("/api/social/analytics/overview")
@@ -225,14 +287,15 @@ class ApiClient {
     return `${API_BASE_URL}/auth/instagram${params}`
   }
 
-  async selectInstagramAccount(accountId: string): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
-  console.log("[v0] Calling selectInstagramAccount with accountId:", accountId)
-  return this.request("/auth/instagram/select-account", {
-    method: "POST",
-    body: JSON.stringify({ accountId }),
-  })
-}
-
+  async selectInstagramAccount(
+    accountId: string,
+  ): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
+    console.log("[v0] Calling selectInstagramAccount with accountId:", accountId)
+    return this.request("/auth/instagram/select-account", {
+      method: "POST",
+      body: JSON.stringify({ accountId }),
+    })
+  }
 }
 
 export const apiClient = new ApiClient()

@@ -7,11 +7,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Plus, Facebook, Instagram, ArrowLeft, Upload, Hash, MapPin, QrCode, LinkIcon, X, Settings, CheckCircle } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Calendar,
+  Plus,
+  Facebook,
+  Instagram,
+  ArrowLeft,
+  Upload,
+  Hash,
+  MapPin,
+  QrCode,
+  LinkIcon,
+  X,
+  Settings,
+  CheckCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { apiClient, type PostRequest, type FacebookPage, type InstagramAccount, type AuthStatus } from "@/lib/api"
+import { uploadMedia } from "@/lib/api"
 
 export default function CampaignPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
@@ -19,7 +40,7 @@ export default function CampaignPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [isPosting, setIsPosting] = useState(false)
   const [postResult, setPostResult] = useState<any>(null)
-  
+
   // Account management state
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
   const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
@@ -41,27 +62,27 @@ export default function CampaignPage() {
     try {
       const status = await apiClient.getAuthStatus()
       setAuthStatus(status)
-      
+
       if (status.facebook) {
         const [selectedPage, pages] = await Promise.all([
           apiClient.getSelectedFacebookPage(),
-          apiClient.getFacebookPages()
+          apiClient.getFacebookPages(),
         ])
         setSelectedFacebookPage(selectedPage)
         setFacebookPages(pages)
       }
-      
+
       if (status.instagram) {
         const [selectedAccount, accounts] = await Promise.all([
           apiClient.getSelectedInstagramAccount(),
-          apiClient.getInstagramAccounts()
+          apiClient.getInstagramAccounts(),
         ])
         console.log("Instagram accounts loaded:", accounts) // Debug log
         setSelectedInstagramAccount(selectedAccount)
         setInstagramAccounts(accounts)
       }
     } catch (error) {
-      console.error('Failed to load auth status:', error)
+      console.error("Failed to load auth status:", error)
     } finally {
       setIsLoadingAuth(false)
     }
@@ -72,17 +93,13 @@ export default function CampaignPage() {
       setPostResult({ error: "Please connect and select a Facebook page first" })
       return
     }
-    
+
     if (platform === "Instagram" && !selectedInstagramAccount) {
       setPostResult({ error: "Please connect and select an Instagram account first" })
       return
     }
 
-    setSelectedPlatforms((prev) => 
-      prev.includes(platform) 
-        ? prev.filter((p) => p !== platform) 
-        : [...prev, platform]
-    )
+    setSelectedPlatforms((prev) => (prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]))
     setPostResult(null) // Clear any errors
   }
 
@@ -96,7 +113,7 @@ export default function CampaignPage() {
         await loadAuthStatus()
       }
     } catch (error) {
-      console.error('Failed to select Facebook page:', error)
+      console.error("Failed to select Facebook page:", error)
       setPostResult({ error: "Failed to select Facebook page" })
     }
   }
@@ -111,7 +128,7 @@ export default function CampaignPage() {
         await loadAuthStatus()
       }
     } catch (error) {
-      console.error('Failed to select Instagram account:', error)
+      console.error("Failed to select Instagram account:", error)
       setPostResult({ error: "Failed to select Instagram account" })
     }
   }
@@ -119,8 +136,16 @@ export default function CampaignPage() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
     if (files) {
-      const newImages = Array.from(files).slice(0, 5 - uploadedImages.length)
+      const accepted = Array.from(files).filter(
+        (f) => f.type.startsWith("image/") || f.type === "video/mp4" || f.type === "video/quicktime", // mov
+      )
+      const newImages = accepted.slice(0, 10 - uploadedImages.length)
       setUploadedImages((prev) => [...prev, ...newImages])
+      if (accepted.length !== files.length) {
+        setPostResult({
+          error: "Some files were skipped. Allowed: images (JPG/PNG/WEBP/GIF) and videos in MP4/MOV (H.264/AAC).",
+        })
+      }
     }
   }
 
@@ -136,71 +161,131 @@ export default function CampaignPage() {
     e.preventDefault()
     const files = e.dataTransfer.files
     if (files) {
-      const newImages = Array.from(files)
-        .filter((file) => file.type.startsWith("image/"))
-        .slice(0, 5 - uploadedImages.length)
+      const accepted = Array.from(files).filter(
+        (f) => f.type.startsWith("image/") || f.type === "video/mp4" || f.type === "video/quicktime",
+      )
+      const newImages = accepted.slice(0, 10 - uploadedImages.length)
       setUploadedImages((prev) => [...prev, ...newImages])
+      if (accepted.length !== files.length) {
+        setPostResult({
+          error: "Some files were skipped. Allowed: images (JPG/PNG/WEBP/GIF) and videos in MP4/MOV (H.264/AAC).",
+        })
+      }
     }
   }
 
   const handlePostNow = async () => {
-    if (!postContent.trim() || selectedPlatforms.length === 0) return
+  if (!postContent.trim() || selectedPlatforms.length === 0) return;
 
-    if (selectedPlatforms.includes("Facebook") && !selectedFacebookPage) {
-      setPostResult({ error: "Please select a Facebook page first" })
-      return
-    }
-
-    if (selectedPlatforms.includes("Instagram") && !selectedInstagramAccount) {
-      setPostResult({ error: "Please select an Instagram account first" })
-      return
-    }
-
-    setIsPosting(true)
-    setPostResult(null)
-
-    try {
-      const postRequest: PostRequest = {
-        content: postContent.trim(),
-        mediaUrls: [], // TODO: Handle image upload URLs
-        mediaType: "IMAGE",
-        platforms: {},
-        isScheduled: false,
-        scheduledTime: Date.now()
-      }
-
-      if (selectedPlatforms.includes("Facebook") && selectedFacebookPage) {
-        postRequest.platforms.facebook = {
-          enabled: true,
-          id: selectedFacebookPage.id
-        }
-      }
-
-      if (selectedPlatforms.includes("Instagram") && selectedInstagramAccount) {
-        postRequest.platforms.instagram = {
-          enabled: true,
-          id: selectedInstagramAccount.id
-        }
-      }
-
-      console.log("Posting with dynamic IDs:", JSON.stringify(postRequest, null, 2))
-      const result = await apiClient.postToMultiplePlatforms(postRequest)
-      setPostResult(result)
-
-      if (result.facebook?.success || result.instagram?.success) {
-        setPostContent("")
-        setSelectedPlatforms([])
-        setUploadedImages([])
-      }
-    } catch (error) {
-      console.error("Failed to post:", error)
-      setPostResult({ 
-        error: error instanceof Error ? error.message : "Failed to post content. Please try again." 
-      })
-    } finally {
-      setIsPosting(false)
-    }
+  if (selectedPlatforms.includes("Facebook") && !selectedFacebookPage) {
+    setPostResult({ error: "Please select a Facebook page first" });
+    return;
   }
+
+  if (selectedPlatforms.includes("Instagram") && !selectedInstagramAccount) {
+    setPostResult({ error: "Please select an Instagram account first" });
+    return;
+  }
+
+  if (uploadedImages.length === 0) {
+    setPostResult({ error: "Please add at least one image or video" });
+    return;
+  }
+
+  setIsPosting(true);
+  setPostResult(null);
+
+  try {
+    const upload = await uploadMedia(uploadedImages);
+    const mediaUrls = upload.files.map((f) => f.url);
+
+    const wantsInstagram = selectedPlatforms.includes("Instagram");
+    const hasVideo = uploadedImages.some((f) => f.type === "video/mp4" || f.type === "video/quicktime");
+    const hasNonHttpsOrLocal = mediaUrls.some((u) => {
+      const lower = u.toLowerCase();
+      return !lower.startsWith("https://") || lower.includes("localhost") || lower.includes("127.0.0.1");
+    });
+
+    if (wantsInstagram && hasNonHttpsOrLocal) {
+      setPostResult({
+        error:
+          "Instagram requires a public HTTPS URL for media. Please deploy the app (or use a public tunnel) and try again. Facebook can still be posted.",
+      });
+      setIsPosting(false);
+      return;
+    }
+
+    // If posting Instagram video, send to /instagram/video endpoint
+    if (wantsInstagram && hasVideo) {
+      // Build the payload for Instagram video post endpoint
+      const videoPostRequest = {
+        businessAccountId: selectedInstagramAccount?.id,
+        accessToken: "", // get token as needed or from context
+        postContent: postContent.trim(),
+        videoUrl: mediaUrls[0], // assuming single video
+        thumbnailUrl: undefined, // optional: supply if available
+      };
+
+const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/social/instagram/video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(videoPostRequest),
+      });
+
+      const result = await response.json();
+      setPostResult(result);
+      if (result.success) {
+        setPostContent("");
+        setSelectedPlatforms([]);
+        setUploadedImages([]);
+      }
+      setIsPosting(false);
+      return;
+    }
+
+    // Otherwise, handle general multipart posts to your existing endpoint
+    const mediaType =
+      hasVideo && uploadedImages.length === 1
+        ? "VIDEO"
+        : !hasVideo && uploadedImages.length > 1
+        ? "CAROUSEL"
+        : "IMAGE";
+
+    const postRequest: PostRequest = {
+      content: postContent.trim(),
+      mediaUrls,
+      mediaType,
+      platforms: {},
+      isScheduled: false,
+      scheduledTime: Date.now(),
+    };
+
+    if (selectedPlatforms.includes("Facebook") && selectedFacebookPage) {
+      postRequest.platforms.facebook = { enabled: true, id: selectedFacebookPage.id };
+    }
+
+    if (wantsInstagram && selectedInstagramAccount && !hasNonHttpsOrLocal) {
+      postRequest.platforms.instagram = { enabled: true, id: selectedInstagramAccount.id };
+    }
+
+    const result = await apiClient.postToMultiplePlatformsMultipart(postRequest, uploadedImages);
+    setPostResult(result);
+
+    if (result.facebook?.success || result.instagram?.success) {
+      setPostContent("");
+      setSelectedPlatforms([]);
+      setUploadedImages([]);
+    }
+  } catch (error) {
+    console.error("Failed to post:", error);
+    setPostResult({
+      error: error instanceof Error ? error.message : "Failed to post content. Please try again.",
+    });
+  } finally {
+    setIsPosting(false);
+  }
+};
+
 
   const canPost = postContent.trim() && selectedPlatforms.length > 0
 
@@ -275,7 +360,7 @@ export default function CampaignPage() {
                     <div>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         multiple
                         onChange={handleImageUpload}
                         className="hidden"
@@ -293,12 +378,12 @@ export default function CampaignPage() {
 
                 {uploadedImages.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Uploaded Images ({uploadedImages.length}/5)</Label>
+                    <Label>Uploaded Media ({uploadedImages.length}/10)</Label>
                     <div className="grid grid-cols-2 gap-2">
                       {uploadedImages.map((image, index) => (
                         <div key={index} className="relative group">
                           <img
-                            src={URL.createObjectURL(image)}
+                            src={URL.createObjectURL(image) || "/placeholder.svg"}
                             alt={`Upload ${index + 1}`}
                             className="w-full h-20 object-cover rounded-lg border border-border"
                           />
@@ -320,7 +405,7 @@ export default function CampaignPage() {
                 {/* Connected Accounts Section */}
                 <div className="space-y-2">
                   <Label>Connected Accounts</Label>
-                  
+
                   {/* Facebook Account */}
                   {authStatus.facebook ? (
                     <div className="flex items-center justify-between p-3 border rounded-lg bg-green-50 border-green-200">
@@ -330,9 +415,7 @@ export default function CampaignPage() {
                           <span className="text-sm font-medium">
                             {selectedFacebookPage ? selectedFacebookPage.name : "No page selected"}
                           </span>
-                          {selectedFacebookPage && (
-                            <CheckCircle className="h-3 w-3 text-green-600" />
-                          )}
+                          {selectedFacebookPage && <CheckCircle className="h-3 w-3 text-green-600" />}
                         </div>
                       </div>
                       <Dialog open={showFacebookPageModal} onOpenChange={setShowFacebookPageModal}>
@@ -345,9 +428,7 @@ export default function CampaignPage() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Select Facebook Page</DialogTitle>
-                            <DialogDescription>
-                              Choose which Facebook page to use for posting
-                            </DialogDescription>
+                            <DialogDescription>Choose which Facebook page to use for posting</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-2">
                             {facebookPages.map((page) => (
@@ -374,10 +455,10 @@ export default function CampaignPage() {
                         <Facebook className="h-4 w-4 text-blue-600" />
                         <span className="text-sm text-muted-foreground">Facebook not connected</span>
                       </div>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={() => window.open(apiClient.getFacebookAuthUrl(), '_blank')}
+                        onClick={() => window.open(apiClient.getFacebookAuthUrl(), "_blank")}
                       >
                         Connect
                       </Button>
@@ -391,13 +472,13 @@ export default function CampaignPage() {
                         <Instagram className="h-4 w-4 text-pink-600" />
                         <div className="flex flex-col">
                           <span className="text-sm font-medium">
-                            {selectedInstagramAccount ? 
-            selectedInstagramAccount.name || `@${selectedInstagramAccount.username}` || selectedInstagramAccount.id 
-            : "No account selected"}
-        </span>
-        {selectedInstagramAccount && (
-          <CheckCircle className="h-3 w-3 text-green-600" />
-        )}
+                            {selectedInstagramAccount
+                              ? selectedInstagramAccount.name ||
+                                `@${selectedInstagramAccount.username}` ||
+                                selectedInstagramAccount.id
+                              : "No account selected"}
+                          </span>
+                          {selectedInstagramAccount && <CheckCircle className="h-4 w-4 text-green-600" />}
                         </div>
                       </div>
                       <Dialog open={showInstagramAccountModal} onOpenChange={setShowInstagramAccountModal}>
@@ -410,9 +491,7 @@ export default function CampaignPage() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Select Instagram Account</DialogTitle>
-                            <DialogDescription>
-                              Choose which Instagram account to use for posting
-                            </DialogDescription>
+                            <DialogDescription>Choose which Instagram account to use for posting</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-2">
                             {instagramAccounts.map((account) => (
@@ -439,10 +518,10 @@ export default function CampaignPage() {
                         <Instagram className="h-4 w-4 text-pink-600" />
                         <span className="text-sm text-muted-foreground">Instagram not connected</span>
                       </div>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={() => window.open(apiClient.getInstagramAuthUrl(), '_blank')}
+                        onClick={() => window.open(apiClient.getInstagramAuthUrl(), "_blank")}
                       >
                         Connect
                       </Button>
@@ -455,17 +534,17 @@ export default function CampaignPage() {
                   <Label>Select Platforms</Label>
                   <div className="grid grid-cols-1 gap-2">
                     {[
-                      { 
-                        name: "Facebook", 
-                        icon: Facebook, 
+                      {
+                        name: "Facebook",
+                        icon: Facebook,
                         color: "text-blue-600",
-                        available: authStatus.facebook && selectedFacebookPage
+                        available: authStatus.facebook && selectedFacebookPage,
                       },
-                      { 
-                        name: "Instagram", 
-                        icon: Instagram, 
+                      {
+                        name: "Instagram",
+                        icon: Instagram,
                         color: "text-pink-600",
-                        available: authStatus.instagram && selectedInstagramAccount
+                        available: authStatus.instagram && selectedInstagramAccount,
                       },
                     ].map((platform) => (
                       <Button
