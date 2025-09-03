@@ -6,12 +6,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi, LogOut } from "lucide-react"
 import Link from "next/link"
-import { apiClient, type AuthStatus, type AnalyticsOverview, type PostHistoryItem } from "@/lib/api"
+import {
+  apiClient,
+  type AuthStatus,
+  type AnalyticsOverview,
+  type PostHistoryItem,
+  type FacebookPage,
+  type InstagramAccount,
+} from "../../lib/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 export default function DashboardPage() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ facebook: false, instagram: false })
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null)
   const [recentPosts, setRecentPosts] = useState<PostHistoryItem[]>([])
+  const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
+  const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
+  const [facebookPages, setFacebookPages] = useState<FacebookPage[]>([])
+  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccount[]>([])
+  const [showFacebookPageModal, setShowFacebookPageModal] = useState(false)
+  const [showInstagramAccountModal, setShowInstagramAccountModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchAuthStatus = async () => {
@@ -41,6 +62,32 @@ export default function DashboardPage() {
     }
   }
 
+  const handleSelectFacebookPage = async (pageId: string) => {
+    try {
+      const result = await apiClient.selectFacebookPage(pageId)
+      if (result.success) {
+        setSelectedFacebookPage(result.page)
+        setShowFacebookPageModal(false)
+        await fetchAuthStatus()
+      }
+    } catch (e) {
+      console.error("Failed to select Facebook page:", e)
+    }
+  }
+
+  const handleSelectInstagramAccount = async (accountId: string) => {
+    try {
+      const result = await apiClient.selectInstagramAccount(accountId)
+      if (result.success) {
+        setSelectedInstagramAccount(result.account)
+        setShowInstagramAccountModal(false)
+        await fetchAuthStatus()
+      }
+    } catch (e) {
+      console.error("Failed to select Instagram account:", e)
+    }
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
@@ -51,9 +98,38 @@ export default function DashboardPage() {
     fetchData()
   }, [])
 
-  const handleConnectionChange = () => {
-    fetchAuthStatus()
-  }
+  useEffect(() => {
+    const loadAccountData = async () => {
+      try {
+        if (authStatus.facebook) {
+          const [selectedPage, pages] = await Promise.all([
+            apiClient.getSelectedFacebookPage(),
+            apiClient.getFacebookPages(),
+          ])
+          setSelectedFacebookPage(selectedPage)
+          setFacebookPages(pages)
+        } else {
+          setSelectedFacebookPage(null)
+          setFacebookPages([])
+        }
+
+        if (authStatus.instagram) {
+          const [selectedAccount, accounts] = await Promise.all([
+            apiClient.getSelectedInstagramAccount(),
+            apiClient.getInstagramAccounts(),
+          ])
+          setSelectedInstagramAccount(selectedAccount)
+          setInstagramAccounts(accounts)
+        } else {
+          setSelectedInstagramAccount(null)
+          setInstagramAccounts([])
+        }
+      } catch (e) {
+        console.error("Failed loading account data:", e)
+      }
+    }
+    loadAccountData()
+  }, [authStatus.facebook, authStatus.instagram])
 
   const totalPosts = analytics ? Math.floor(analytics.totalReach / 500) : 24
 
@@ -68,7 +144,33 @@ export default function DashboardPage() {
                 Pro
               </Badge>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <Button
+                size="sm"
+                className={`${authStatus.facebook ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
+                onClick={() =>
+                  authStatus.facebook
+                    ? setShowFacebookPageModal(true)
+                    : window.open(apiClient.getFacebookAuthUrl(), "_blank")
+                }
+                title={authStatus.facebook ? "Facebook Connected - Manage" : "Connect Facebook"}
+              >
+                <Facebook className="h-4 w-4 mr-2" />
+                Facebook
+              </Button>
+              <Button
+                size="sm"
+                className={`${authStatus.instagram ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
+                onClick={() =>
+                  authStatus.instagram
+                    ? setShowInstagramAccountModal(true)
+                    : window.open(apiClient.getInstagramAuthUrl(), "_blank")
+                }
+                title={authStatus.instagram ? "Instagram Connected - Manage" : "Connect Instagram"}
+              >
+                <Instagram className="h-4 w-4 mr-2" />
+                Instagram
+              </Button>
               <Button variant="outline" size="sm">
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
@@ -199,6 +301,57 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Hidden dialogs for Facebook and Instagram account management */}
+          <Dialog open={showFacebookPageModal} onOpenChange={setShowFacebookPageModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Select Facebook Page</DialogTitle>
+                <DialogDescription>Choose which Facebook page to use for posting</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {facebookPages.map((page) => (
+                  <Button
+                    key={page.id}
+                    variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleSelectFacebookPage(page.id)}
+                  >
+                    <Facebook className="h-4 w-4 mr-2 text-blue-600" />
+                    {page.name}
+                    {selectedFacebookPage?.id === page.id && (
+                      <span className="h-4 w-4 ml-auto text-green-600">✓</span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showInstagramAccountModal} onOpenChange={setShowInstagramAccountModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Select Instagram Account</DialogTitle>
+                <DialogDescription>Choose which Instagram account to use for posting</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {instagramAccounts.map((account) => (
+                  <Button
+                    key={account.id}
+                    variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleSelectInstagramAccount(account.id)}
+                  >
+                    <Instagram className="h-4 w-4 mr-2 text-pink-600" />
+                    {account.username ? `@${account.username}` : account.name}
+                    {selectedInstagramAccount?.id === account.id && (
+                      <span className="h-4 w-4 ml-auto text-green-600">✓</span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

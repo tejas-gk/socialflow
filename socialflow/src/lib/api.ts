@@ -66,6 +66,46 @@ export interface AnalyticsOverview {
       followers: number
     }
   }
+  details?: {
+    facebook?: FacebookDetails
+    instagram?: InstagramDetails
+  }
+}
+
+export type TimeSeriesPoint = { date: string; value: number }
+
+export type FacebookDetails = {
+  pageId: string
+  name?: string
+  metrics: {
+    reach: number
+    engagement: number
+    followers: number
+    impressions: number
+    views: number
+  }
+  timeseries: {
+    reach: TimeSeriesPoint[]
+    engaged_users: TimeSeriesPoint[]
+    impressions: TimeSeriesPoint[]
+    views: TimeSeriesPoint[]
+  }
+}
+
+export type InstagramDetails = {
+  accountId: string
+  username?: string
+  metrics: {
+    reach: number
+    impressions: number
+    profileViews: number
+    followers: number
+  }
+  timeseries: {
+    reach: TimeSeriesPoint[]
+    impressions: TimeSeriesPoint[]
+    profile_views: TimeSeriesPoint[]
+  }
 }
 
 export interface PostHistoryItem {
@@ -109,25 +149,27 @@ export type UploadResponse = {
  */
 export async function uploadMedia(files: File[]) {
   // Upload files one by one following official approach
-  const uploadedFiles = [];
+  const uploadedFiles = []
 
   for (const file of files) {
     const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
       method: "POST",
       body: file, // send raw file in body
-    });
+    })
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to upload media");
+      const errorData = await response.json()
+      throw new Error(errorData.error || "Failed to upload media")
     }
 
-    const data = await response.json();
-    uploadedFiles.push(data);
+    const data = await response.json()
+    uploadedFiles.push(data)
   }
 
-  return { files: uploadedFiles };
+  return { files: uploadedFiles }
 }
+
+export type FbPage = FacebookPage
 
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -257,8 +299,13 @@ class ApiClient {
   }
 
   // Analytics methods
-  async getAnalyticsOverview(): Promise<AnalyticsOverview> {
-    return this.request<AnalyticsOverview>("/api/social/analytics/overview")
+  async getAnalyticsOverview(fbPageId?: string, igAccountId?: string): Promise<AnalyticsOverview> {
+    const params = new URLSearchParams()
+    if (fbPageId) params.set("fbPageId", fbPageId)
+    if (igAccountId) params.set("igAccountId", igAccountId)
+    const qs = params.toString()
+    const url = `/api/social/analytics/overview${qs ? `?${qs}` : ""}`
+    return this.request<AnalyticsOverview>(url)
   }
 
   // Post management methods
@@ -295,6 +342,40 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ accountId }),
     })
+  }
+
+  // Helper functions for Facebook analytics endpoints used by UI
+  async getFacebookPagesAnalytics(): Promise<{ data: FacebookPage[] }> {
+    const pages = await this.request<FacebookPage[]>("/api/social/analytics/facebook/pages")
+    return { data: pages }
+  }
+
+  async getFacebookPageInsights(pageId: string): Promise<any> {
+    return this.request<any>(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
+  }
+
+  async getFacebookPagePosts(params: {
+    pageId: string
+    after?: string
+    before?: string
+    type?: string
+    fromDate?: string
+    toDate?: string
+    limit?: number
+  }): Promise<any> {
+    const q = new URLSearchParams()
+    q.set("pageId", params.pageId)
+    if (params.after) q.set("after", params.after)
+    if (params.before) q.set("before", params.before)
+    if (params.type) q.set("type", params.type)
+    if (params.fromDate) q.set("fromDate", params.fromDate)
+    if (params.toDate) q.set("toDate", params.toDate)
+    if (typeof params.limit === "number") q.set("limit", String(params.limit))
+    return this.request<any>(`/api/social/analytics/facebook/posts?${q.toString()}`)
+  }
+
+  async getFacebookPostDetails(postId: string): Promise<any> {
+    return this.request<any>(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}`)
   }
 }
 

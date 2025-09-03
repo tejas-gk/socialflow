@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Fetching analytics overview from backend")
 
-    const response = await fetch(`${API_BASE_URL}/social/analytics/overview`, {
+    const response = await fetch(`${API_BASE_URL}/api/social/analytics/overview`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
