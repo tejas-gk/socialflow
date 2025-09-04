@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import {
   X,
   Settings,
   CheckCircle,
+  Clock,
 } from "lucide-react"
 import Link from "next/link"
 import { apiClient, type PostRequest, type FacebookPage, type InstagramAccount, type AuthStatus } from "@/lib/api"
@@ -40,6 +42,12 @@ export default function CampaignPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [isPosting, setIsPosting] = useState(false)
   const [postResult, setPostResult] = useState<any>(null)
+
+  // Schedule Post States
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+  const [scheduledDate, setScheduledDate] = useState("")
+  const [scheduledTime, setScheduledTime] = useState("")
+  const [isScheduling, setIsScheduling] = useState(false)
 
   // Account management state
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
@@ -55,6 +63,11 @@ export default function CampaignPage() {
 
   useEffect(() => {
     loadAuthStatus()
+    // Set default values for scheduling (tomorrow at 9 AM)
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setScheduledDate(tomorrow.toISOString().split('T')[0])
+    setScheduledTime("09:00")
   }, [])
 
   const loadAuthStatus = async () => {
@@ -77,7 +90,7 @@ export default function CampaignPage() {
           apiClient.getSelectedInstagramAccount(),
           apiClient.getInstagramAccounts(),
         ])
-        console.log("Instagram accounts loaded:", accounts) // Debug log
+        console.log("Instagram accounts loaded:", accounts)
         setSelectedInstagramAccount(selectedAccount)
         setInstagramAccounts(accounts)
       }
@@ -100,7 +113,7 @@ export default function CampaignPage() {
     }
 
     setSelectedPlatforms((prev) => (prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]))
-    setPostResult(null) // Clear any errors
+    setPostResult(null)
   }
 
   const handleSelectFacebookPage = async (pageId: string) => {
@@ -109,7 +122,6 @@ export default function CampaignPage() {
       if (result.success) {
         setSelectedFacebookPage(result.page)
         setShowFacebookPageModal(false)
-        // Refresh auth status
         await loadAuthStatus()
       }
     } catch (error) {
@@ -124,7 +136,6 @@ export default function CampaignPage() {
       if (result.success) {
         setSelectedInstagramAccount(result.account)
         setShowInstagramAccountModal(false)
-        // Refresh auth status
         await loadAuthStatus()
       }
     } catch (error) {
@@ -137,7 +148,7 @@ export default function CampaignPage() {
     const files = event.target.files
     if (files) {
       const accepted = Array.from(files).filter(
-        (f) => f.type.startsWith("image/") || f.type === "video/mp4" || f.type === "video/quicktime", // mov
+        (f) => f.type.startsWith("image/") || f.type === "video/mp4" || f.type === "video/quicktime",
       )
       const newImages = accepted.slice(0, 10 - uploadedImages.length)
       setUploadedImages((prev) => [...prev, ...newImages])
@@ -174,118 +185,246 @@ export default function CampaignPage() {
     }
   }
 
-  const handlePostNow = async () => {
-  if (!postContent.trim() || selectedPlatforms.length === 0) return;
+  const validateScheduleDateTime = (date: string, time: string): boolean => {
+  if (!date || !time) return false
+  
+  const scheduledDateTime = new Date(`${date}T${time}`)
+  const now = new Date()
+  
+  // Facebook requires at least 10 minutes in the future
+  const minFutureTime = new Date(now.getTime() + 10 * 60 * 1000) // 10 minutes from now
+  
+  if (scheduledDateTime <= minFutureTime) {
+    setPostResult({ error: "Scheduled time must be at least 10 minutes in the future for Facebook" })
+    return false
+  }
+
+  // Facebook allows maximum 6 months in advance
+  const maxFutureDate = new Date()
+  maxFutureDate.setMonth(maxFutureDate.getMonth() + 6)
+  
+  if (scheduledDateTime > maxFutureDate) {
+    setPostResult({ error: "Cannot schedule more than 6 months in advance for Facebook" })
+    return false
+  }
+
+  return true
+}
+
+const convertToUnixTimestamp = (date: string, time: string): number => {
+  // Create date in local timezone first
+  const scheduledDateTime = new Date(`${date}T${time}`)
+  
+  // Convert to Unix timestamp (seconds, not milliseconds)
+  return Math.floor(scheduledDateTime.getTime() / 1000)
+}
+
+const handleSchedulePost = async () => {
+  if (!postContent.trim() || selectedPlatforms.length === 0) return
+
+  if (!validateScheduleDateTime(scheduledDate, scheduledTime)) return
 
   if (selectedPlatforms.includes("Facebook") && !selectedFacebookPage) {
-    setPostResult({ error: "Please select a Facebook page first" });
-    return;
+    setPostResult({ error: "Please select a Facebook page first" })
+    return
   }
 
   if (selectedPlatforms.includes("Instagram") && !selectedInstagramAccount) {
-    setPostResult({ error: "Please select an Instagram account first" });
-    return;
+    setPostResult({ error: "Please select an Instagram account first" })
+    return
   }
 
   if (uploadedImages.length === 0) {
-    setPostResult({ error: "Please add at least one image or video" });
-    return;
+    setPostResult({ error: "Please add at least one image or video" })
+    return
   }
 
-  setIsPosting(true);
-  setPostResult(null);
+  setIsScheduling(true)
+  setPostResult(null)
 
   try {
-    const upload = await uploadMedia(uploadedImages);
-    const mediaUrls = upload.files.map((f) => f.url);
+    const upload = await uploadMedia(uploadedImages)
+    const mediaUrls = upload.files.map((f) => f.url)
 
-    const wantsInstagram = selectedPlatforms.includes("Instagram");
-    const hasVideo = uploadedImages.some((f) => f.type === "video/mp4" || f.type === "video/quicktime");
+    const wantsInstagram = selectedPlatforms.includes("Instagram")
+    const hasVideo = uploadedImages.some((f) => f.type === "video/mp4" || f.type === "video/quicktime")
     const hasNonHttpsOrLocal = mediaUrls.some((u) => {
-      const lower = u.toLowerCase();
-      return !lower.startsWith("https://") || lower.includes("localhost") || lower.includes("127.0.0.1");
-    });
+      const lower = u.toLowerCase()
+      return !lower.startsWith("https://") || lower.includes("localhost") || lower.includes("127.0.0.1")
+    })
 
     if (wantsInstagram && hasNonHttpsOrLocal) {
       setPostResult({
-        error:
-          "Instagram requires a public HTTPS URL for media. Please deploy the app (or use a public tunnel) and try again. Facebook can still be posted.",
-      });
-      setIsPosting(false);
-      return;
+        error: "Instagram requires a public HTTPS URL for media. Please deploy the app (or use a public tunnel) and try again. Facebook can still be scheduled.",
+      })
+      setIsScheduling(false)
+      return
     }
 
-    // If posting Instagram video, send to /instagram/video endpoint
-    if (wantsInstagram && hasVideo) {
-      // Build the payload for Instagram video post endpoint
-      const videoPostRequest = {
-        businessAccountId: selectedInstagramAccount?.id,
-        accessToken: "", // get token as needed or from context
-        postContent: postContent.trim(),
-        videoUrl: mediaUrls[0], // assuming single video
-        thumbnailUrl: undefined, // optional: supply if available
-      };
-
-const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/social/instagram/video`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(videoPostRequest),
-      });
-
-      const result = await response.json();
-      setPostResult(result);
-      if (result.success) {
-        setPostContent("");
-        setSelectedPlatforms([]);
-        setUploadedImages([]);
-      }
-      setIsPosting(false);
-      return;
-    }
-
-    // Otherwise, handle general multipart posts to your existing endpoint
+    const scheduledTimestamp = convertToUnixTimestamp(scheduledDate, scheduledTime)
+    
+    // Debug log the timestamp
+    console.log('Scheduled timestamp:', scheduledTimestamp)
+    console.log('Scheduled date/time:', new Date(`${scheduledDate}T${scheduledTime}`))
+    console.log('Current timestamp:', Math.floor(Date.now() / 1000))
+    
     const mediaType =
       hasVideo && uploadedImages.length === 1
         ? "VIDEO"
         : !hasVideo && uploadedImages.length > 1
         ? "CAROUSEL"
-        : "IMAGE";
+        : "IMAGE"
 
     const postRequest: PostRequest = {
       content: postContent.trim(),
       mediaUrls,
       mediaType,
       platforms: {},
-      isScheduled: false,
-      scheduledTime: Date.now(),
-    };
+      isScheduled: true,
+      scheduledTime: scheduledTimestamp,
+    }
 
     if (selectedPlatforms.includes("Facebook") && selectedFacebookPage) {
-      postRequest.platforms.facebook = { enabled: true, id: selectedFacebookPage.id };
+      postRequest.platforms.facebook = { enabled: true, id: selectedFacebookPage.id }
     }
 
     if (wantsInstagram && selectedInstagramAccount && !hasNonHttpsOrLocal) {
-      postRequest.platforms.instagram = { enabled: true, id: selectedInstagramAccount.id };
+      postRequest.platforms.instagram = { enabled: true, id: selectedInstagramAccount.id }
     }
 
-    const result = await apiClient.postToMultiplePlatformsMultipart(postRequest, uploadedImages);
-    setPostResult(result);
+    const result = await apiClient.postToMultiplePlatformsMultipart(postRequest, uploadedImages)
+    
+    setPostResult({
+      ...result,
+      scheduled: true,
+      scheduledFor: new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString(),
+    })
 
     if (result.facebook?.success || result.instagram?.success) {
-      setPostContent("");
-      setSelectedPlatforms([]);
-      setUploadedImages([]);
+      setPostContent("")
+      setSelectedPlatforms([])
+      setUploadedImages([])
+      setIsScheduleModalOpen(false)
     }
   } catch (error) {
-    console.error("Failed to post:", error);
+    console.error("Failed to schedule post:", error)
     setPostResult({
-      error: error instanceof Error ? error.message : "Failed to post content. Please try again.",
-    });
+      error: error instanceof Error ? error.message : "Failed to schedule post. Please try again.",
+    })
   } finally {
-    setIsPosting(false);
+    setIsScheduling(false)
   }
-};
+}
 
+  const handlePostNow = async () => {
+    if (!postContent.trim() || selectedPlatforms.length === 0) return
+
+    if (selectedPlatforms.includes("Facebook") && !selectedFacebookPage) {
+      setPostResult({ error: "Please select a Facebook page first" })
+      return
+    }
+
+    if (selectedPlatforms.includes("Instagram") && !selectedInstagramAccount) {
+      setPostResult({ error: "Please select an Instagram account first" })
+      return
+    }
+
+    if (uploadedImages.length === 0) {
+      setPostResult({ error: "Please add at least one image or video" })
+      return
+    }
+
+    setIsPosting(true)
+    setPostResult(null)
+
+    try {
+      const upload = await uploadMedia(uploadedImages)
+      const mediaUrls = upload.files.map((f) => f.url)
+
+      const wantsInstagram = selectedPlatforms.includes("Instagram")
+      const hasVideo = uploadedImages.some((f) => f.type === "video/mp4" || f.type === "video/quicktime")
+      const hasNonHttpsOrLocal = mediaUrls.some((u) => {
+        const lower = u.toLowerCase()
+        return !lower.startsWith("https://") || lower.includes("localhost") || lower.includes("127.0.0.1")
+      })
+
+      if (wantsInstagram && hasNonHttpsOrLocal) {
+        setPostResult({
+          error:
+            "Instagram requires a public HTTPS URL for media. Please deploy the app (or use a public tunnel) and try again. Facebook can still be posted.",
+        })
+        setIsPosting(false)
+        return
+      }
+
+      // If posting Instagram video, send to /instagram/video endpoint
+      if (wantsInstagram && hasVideo) {
+        const videoPostRequest = {
+          businessAccountId: selectedInstagramAccount?.id,
+          accessToken: "",
+          postContent: postContent.trim(),
+          videoUrl: mediaUrls[0],
+          thumbnailUrl: undefined,
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/social/instagram/video`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(videoPostRequest),
+        })
+
+        const result = await response.json()
+        setPostResult(result)
+        if (result.success) {
+          setPostContent("")
+          setSelectedPlatforms([])
+          setUploadedImages([])
+        }
+        setIsPosting(false)
+        return
+      }
+
+      const mediaType =
+        hasVideo && uploadedImages.length === 1
+          ? "VIDEO"
+          : !hasVideo && uploadedImages.length > 1
+          ? "CAROUSEL"
+          : "IMAGE"
+
+      const postRequest: PostRequest = {
+        content: postContent.trim(),
+        mediaUrls,
+        mediaType,
+        platforms: {},
+        isScheduled: false,
+        scheduledTime: Date.now(),
+      }
+
+      if (selectedPlatforms.includes("Facebook") && selectedFacebookPage) {
+        postRequest.platforms.facebook = { enabled: true, id: selectedFacebookPage.id }
+      }
+
+      if (wantsInstagram && selectedInstagramAccount && !hasNonHttpsOrLocal) {
+        postRequest.platforms.instagram = { enabled: true, id: selectedInstagramAccount.id }
+      }
+
+      const result = await apiClient.postToMultiplePlatformsMultipart(postRequest, uploadedImages)
+      setPostResult(result)
+
+      if (result.facebook?.success || result.instagram?.success) {
+        setPostContent("")
+        setSelectedPlatforms([])
+        setUploadedImages([])
+      }
+    } catch (error) {
+      console.error("Failed to post:", error)
+      setPostResult({
+        error: error instanceof Error ? error.message : "Failed to post content. Please try again.",
+      })
+    } finally {
+      setIsPosting(false)
+    }
+  }
 
   const canPost = postContent.trim() && selectedPlatforms.length > 0
 
@@ -613,9 +752,11 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/social/inst
                   <p className="text-red-700 text-sm">{postResult.error}</p>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-green-700 font-medium text-sm">Post published successfully!</p>
-                    {postResult.facebook?.success && <p className="text-green-600 text-xs">✓ Posted to Facebook</p>}
-                    {postResult.instagram?.success && <p className="text-green-600 text-xs">✓ Posted to Instagram</p>}
+                    <p className="text-green-700 font-medium text-sm">
+                      {postResult.scheduled ? `Post scheduled successfully for ${postResult.scheduledFor}!` : "Post published successfully!"}
+                    </p>
+                    {postResult.facebook?.success && <p className="text-green-600 text-xs">✓ {postResult.scheduled ? "Scheduled for" : "Posted to"} Facebook</p>}
+                    {postResult.instagram?.success && <p className="text-green-600 text-xs">✓ {postResult.scheduled ? "Scheduled for" : "Posted to"} Instagram</p>}
                   </div>
                 )}
               </div>
@@ -631,10 +772,97 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/social/inst
                 <Plus className="h-4 w-4 mr-2" />
                 {isPosting ? "Posting..." : "Post Now"}
               </Button>
-              <Button variant="outline" className="flex-1 bg-transparent">
-                <Calendar className="h-4 w-4 mr-2" />
-                Schedule Post
-              </Button>
+              
+              {/* Schedule Post Dialog */}
+              <Dialog open={isScheduleModalOpen} onOpenChange={setIsScheduleModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="flex-1 bg-transparent" disabled={!canPost}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Schedule Post
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center">
+                      <Clock className="h-5 w-5 mr-2" />
+                      Schedule Your Post
+                    </DialogTitle>
+                    <DialogDescription>
+                      Choose when you want your post to be published on the selected platforms.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="schedule-date">Date</Label>
+                        <Input
+                          id="schedule-date"
+                          type="date"
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="schedule-time">Time</Label>
+                        <Input
+                          id="schedule-time"
+                          type="time"
+                          value={scheduledTime}
+                          onChange={(e) => setScheduledTime(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Preview scheduled date/time */}
+                    {scheduledDate && scheduledTime && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-700">
+                          <strong>Scheduled for:</strong> {new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Selected platforms preview */}
+                    <div className="space-y-2">
+                      <Label>Will be posted to:</Label>
+                      <div className="flex gap-2">
+                        {selectedPlatforms.map((platform) => (
+                          <Badge key={platform} variant="secondary" className="flex items-center gap-1">
+                            {platform === "Facebook" ? (
+                              <Facebook className="h-3 w-3" />
+                            ) : (
+                              <Instagram className="h-3 w-3" />
+                            )}
+                            {platform}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end space-x-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsScheduleModalOpen(false)}
+                      disabled={isScheduling}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSchedulePost}
+                      disabled={!scheduledDate || !scheduledTime || isScheduling}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      <Clock className="h-4 w-4 mr-2" />
+                      {isScheduling ? "Scheduling..." : "Schedule Post"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </CardContent>
         </Card>
