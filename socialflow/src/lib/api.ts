@@ -3,14 +3,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 export interface FacebookPage {
   id: string
   name: string
-  access_token: string
+  access_token?: string
 }
 
 export interface InstagramAccount {
   id: string
-  name: string
-  username: string
-  pageAccessToken: string
+  name?: string
+  username?: string
+  pageAccessToken?: string
 }
 
 export interface AuthStatus {
@@ -44,7 +44,7 @@ export interface AnalyticsOverview {
   topPerformingPost: {
     id: string
     content: string
-    platform: string
+    platform: "Facebook" | "Instagram"
     likes: number
     comments: number
     shares: number
@@ -143,6 +143,42 @@ export type UploadResponse = {
   files: UploadedFileInfo[]
 }
 
+// Connection Status Types
+export interface ConnectionStatus {
+  facebook: {
+    connected: boolean
+    pageSelected: boolean
+    pageName?: string
+    lastUpdated?: string
+  }
+  instagram: {
+    connected: boolean
+    accountSelected: boolean
+    username?: string
+    lastUpdated?: string
+  }
+}
+
+export interface TestResults {
+  facebook: {
+    success: boolean
+    error?: string
+    details?: string
+    userInfo?: { id: string; name: string }
+    pageTest?: { success: boolean; pageName?: string; error?: string }
+    lastTested?: string
+  }
+  instagram: {
+    success: boolean
+    error?: string
+    details?: string
+    accountsFound?: number
+    accountTest?: { success: boolean; username?: string; error?: string }
+    lastTested?: string
+  }
+  overall: boolean
+}
+
 /**
  * Upload media files to the Next.js in-memory upload API.
  * Returns short-lived public URLs suitable for Meta image_url/video_url fields.
@@ -150,7 +186,6 @@ export type UploadResponse = {
 export async function uploadMedia(files: File[]) {
   // Upload files one by one following official approach
   const uploadedFiles = []
-
   for (const file of files) {
     const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
       method: "POST",
@@ -172,18 +207,31 @@ export async function uploadMedia(files: File[]) {
 export type FbPage = FacebookPage
 
 class ApiClient {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`
-    console.log("[v0] API Request:", { url, method: options.method || "GET" })
+  private baseUrl = API_BASE_URL
 
-    const response = await fetch(url, {
+  private getHeaders(): Record<string, string> {
+    return {
+      "Content-Type": "application/json",
+      // Add any authentication headers here if needed
+      // "Authorization": `Bearer ${token}`,
+    }
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`
+    
+    const config: RequestInit = {
+      ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...this.getHeaders(),
         ...options.headers,
       },
-      ...options,
-    })
+    }
 
+    console.log("[v0] API Request:", { url, method: config.method || "GET" })
+    
+    const response = await fetch(url, config)
+    
     console.log("[v0] API Response:", { status: response.status, statusText: response.statusText })
 
     if (!response.ok) {
@@ -199,7 +247,7 @@ class ApiClient {
 
   // Authentication methods
   async getAuthStatus(): Promise<AuthStatus> {
-    return this.request<AuthStatus>("/auth/status")
+    return this.request("/auth/status")
   }
 
   async disconnectPlatform(platform: "facebook" | "instagram"): Promise<{ success: boolean; message: string }> {
@@ -216,10 +264,10 @@ class ApiClient {
     })
   }
 
-  // NEW: Get selected accounts
+  // Get selected accounts
   async getSelectedFacebookPage(): Promise<FacebookPage | null> {
     try {
-      return this.request<FacebookPage>("/auth/facebook/selected-page")
+      return this.request("/auth/facebook/selected-page")
     } catch (error) {
       console.error("No Facebook page selected:", error)
       return null
@@ -228,7 +276,7 @@ class ApiClient {
 
   async getSelectedInstagramAccount(): Promise<InstagramAccount | null> {
     try {
-      return this.request<InstagramAccount>("/auth/instagram/selected-account")
+      return this.request("/auth/instagram/selected-account")
     } catch (error) {
       console.error("No Instagram account selected:", error)
       return null
@@ -236,11 +284,11 @@ class ApiClient {
   }
 
   async getFacebookPages(): Promise<FacebookPage[]> {
-    return this.request<FacebookPage[]>("/auth/facebook/pages")
+    return this.request("/auth/facebook/pages")
   }
 
   async getInstagramAccounts(): Promise<InstagramAccount[]> {
-    return this.request<InstagramAccount[]>("/auth/instagram/accounts")
+    return this.request("/auth/instagram/accounts")
   }
 
   // Social media posting methods
@@ -278,10 +326,10 @@ class ApiClient {
     const form = new FormData()
     form.append("payload", JSON.stringify(postRequest))
     files.forEach((f) => form.append("files", f, f.name))
-
+    
     const url = `${API_BASE_URL}/api/social/post-multipart`
     console.log("[v0] API Multipart Request:", { url, files: files.length })
-
+    
     const response = await fetch(url, {
       method: "POST",
       // Do not set Content-Type; browser will set multipart boundary
@@ -293,24 +341,25 @@ class ApiClient {
       console.error("[v0] API Multipart Error Response:", errorText)
       throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
     }
+
     const data = await response.json()
     console.log("[v0] API Multipart Response Data:", data)
     return data
   }
 
   // Analytics methods
-  async getAnalyticsOverview(fbPageId?: string, igAccountId?: string): Promise<AnalyticsOverview> {
-    const params = new URLSearchParams()
-    if (fbPageId) params.set("fbPageId", fbPageId)
-    if (igAccountId) params.set("igAccountId", igAccountId)
-    const qs = params.toString()
+  async getAnalyticsOverview(params?: { fbPageId?: string; igAccountId?: string }): Promise<AnalyticsOverview> {
+    const searchParams = new URLSearchParams()
+    if (params?.fbPageId) searchParams.set("fbPageId", params.fbPageId)
+    if (params?.igAccountId) searchParams.set("igAccountId", params.igAccountId)
+    const qs = searchParams.toString()
     const url = `/api/social/analytics/overview${qs ? `?${qs}` : ""}`
-    return this.request<AnalyticsOverview>(url)
+    return this.request(url)
   }
 
   // Post management methods
   async getPostHistory(page = 1, limit = 10): Promise<PostHistoryResponse> {
-    return this.request<PostHistoryResponse>(`/api/social/posts/history?page=${page}&limit=${limit}`)
+    return this.request(`/api/social/posts/history?page=${page}&limit=${limit}`)
   }
 
   async getPostDetails(postId: string) {
@@ -334,9 +383,7 @@ class ApiClient {
     return `${API_BASE_URL}/auth/instagram${params}`
   }
 
-  async selectInstagramAccount(
-    accountId: string,
-  ): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
+  async selectInstagramAccount(accountId: string): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
     console.log("[v0] Calling selectInstagramAccount with accountId:", accountId)
     return this.request("/auth/instagram/select-account", {
       method: "POST",
@@ -346,12 +393,12 @@ class ApiClient {
 
   // Helper functions for Facebook analytics endpoints used by UI
   async getFacebookPagesAnalytics(): Promise<{ data: FacebookPage[] }> {
-    const pages = await this.request<FacebookPage[]>("/api/social/analytics/facebook/pages")
+    const pages = await this.request("/api/social/analytics/facebook/pages")
     return { data: pages }
   }
 
   async getFacebookPageInsights(pageId: string): Promise<any> {
-    return this.request<any>(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
+    return this.request(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
   }
 
   async getFacebookPagePosts(params: {
@@ -371,11 +418,45 @@ class ApiClient {
     if (params.fromDate) q.set("fromDate", params.fromDate)
     if (params.toDate) q.set("toDate", params.toDate)
     if (typeof params.limit === "number") q.set("limit", String(params.limit))
-    return this.request<any>(`/api/social/analytics/facebook/posts?${q.toString()}`)
+    return this.request(`/api/social/analytics/facebook/posts?${q.toString()}`)
   }
 
   async getFacebookPostDetails(postId: string): Promise<any> {
-    return this.request<any>(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}`)
+    return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}`)
+  }
+
+  // Connection testing methods
+  async testConnections(): Promise<TestResults> {
+    return this.request("/api/social/test-connections")
+  }
+
+  async getConnectionStatus(): Promise<ConnectionStatus> {
+    return this.request("/api/social/connection-status")
+  }
+
+  // Instagram Analytics methods
+  async getInstagramAccountsAnalytics(): Promise<InstagramAccount[]> {
+    return this.request("/api/social/analytics/instagram/accounts")
+  }
+
+  async getInstagramAccountInsights(accountId: string): Promise<any> {
+    return this.request(`/api/social/analytics/instagram/account-insights?accountId=${encodeURIComponent(accountId)}`)
+  }
+
+  async getInstagramAccountMedia(params: {
+    accountId: string
+    after?: string
+    limit?: number
+  }): Promise<any> {
+    const q = new URLSearchParams()
+    q.set("accountId", params.accountId)
+    if (params.after) q.set("after", params.after)
+    if (typeof params.limit === "number") q.set("limit", String(params.limit))
+    return this.request(`/api/social/analytics/instagram/media?${q.toString()}`)
+  }
+
+  async getInstagramMediaDetails(mediaId: string): Promise<any> {
+    return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}`)
   }
 }
 
