@@ -35,6 +35,9 @@ export default function DashboardPage() {
   const [showInstagramAccountModal, setShowInstagramAccountModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Check if any social platform is connected
+  const isAnySocialConnected = authStatus.facebook || authStatus.instagram
+
   const fetchAuthStatus = async () => {
     try {
       const status = await apiClient.getAuthStatus()
@@ -240,20 +243,33 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link href="/analytics">
-              <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
+            {isAnySocialConnected ? (
+              <Link href="/analytics">
+                <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Analytics</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-accent" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-primary">
+                      {isLoading ? "..." : `+${analytics?.weeklyGrowth.engagement.toFixed(1)}%`}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Engagement this week</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ) : (
+              <Card className="border-border opacity-60 cursor-not-allowed">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Analytics</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-accent" />
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-primary">
-                    {isLoading ? "..." : `+${analytics?.weeklyGrowth.engagement.toFixed(1)}%`}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Engagement this week</p>
+                  <div className="text-2xl font-bold text-muted-foreground">Connect</div>
+                  <p className="text-xs text-muted-foreground">Connect accounts to view analytics</p>
                 </CardContent>
               </Card>
-            </Link>
+            )}
           </div>
 
           <Card className="border-border">
