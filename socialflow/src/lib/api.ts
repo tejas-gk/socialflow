@@ -71,6 +71,153 @@ export interface AnalyticsOverview {
     instagram?: InstagramDetails
   }
 }
+export interface InstagramDashboardReport {
+  getTotalFollowers: {
+    followers_count: number;
+    id: string;
+  };
+  getNewFollowers: {
+    data: {
+      name: "follower_count";
+      period: "day";
+      values: {
+        value: number;
+        end_time: string;
+      }[];
+      title: "Follower Count";
+      description: string;
+      id: string;
+    }[];
+    paging: {
+      previous: string;
+      next: string;
+    };
+  };
+  getTotalPosts: {
+    media_count: number;
+    id: string;
+  };
+  getTotalEngagement: {
+    data: [
+      {
+        name: "total_interactions";
+        period: "day";
+        title: "Content interactions";
+        description: string;
+        total_value: {
+          value: number;
+        };
+        id: string;
+      }
+    ];
+    paging: {
+      previous: string;
+      next: string;
+    };
+  };
+  getProfileViews: {
+    data: {
+      name: "profile_views";
+      period: "day";
+      values: {
+        value: number;
+        end_time: string;
+      }[];
+      title: "Profile Views";
+      description: string;
+      id: string;
+    }[];
+    paging: {
+      previous: string;
+      next: string;
+    };
+  };
+  impressionsVsReach: {
+    impressions: {
+      value: number;
+      end_time: string;
+    }[];
+    reach: {
+      value: number;
+      end_time: string;
+    }[];
+  };
+}
+
+export interface InstagramFollowersResponse {
+  total: {
+    followers_count: number;
+    id: string;
+  };
+  new: {
+    data: {
+      name: "follower_count";
+      period: "day";
+      values: {
+        value: number;
+        end_time: string;
+      }[];
+      title: "Follower Count";
+      description: string;
+      id: string;
+    }[];
+    paging: {
+      previous: string;
+      next: string;
+    };
+  };
+}
+
+export interface InstagramEngagementResponse {
+  data: [
+    {
+      name: "total_interactions";
+      period: "day";
+      title: "Content interactions";
+      description: string;
+      total_value: {
+        value: number;
+      };
+      id: string;
+    }
+  ];
+  paging: {
+    previous: string;
+    next: string;
+  };
+}
+
+export interface InstagramProfileViewsResponse {
+  data: {
+    name: "profile_views";
+    period: "day";
+    values: {
+      value: number;
+      end_time: string;
+    }[];
+    title: "Profile Views";
+    description: string;
+    id: string;
+  }[];
+  paging: {
+    previous: string;
+    next: string;
+  };
+}
+
+export interface InstagramPostsResponse {
+  media_count: number;
+  id: string;
+}
+
+export interface InstagramAccountAnalytics {
+  id: string;
+  name: string;
+  username: string;
+  followersCount: number;
+  mediaCount: number;
+  pageId: string;
+}
 
 export type TimeSeriesPoint = { date: string; value: number }
 
@@ -554,6 +701,30 @@ class ApiClient {
   async getInstagramMediaDetails(mediaId: string): Promise<InstagramMediaDetails> {
     return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}`)
   }
+//   async getInstagramAccountsAnalytics(): Promise<{ data: InstagramAccountAnalytics[] }> {
+//   const accounts = await this.request("/api/social/analytics/instagram/accounts")
+//   return { data: accounts }
+// }
+
+async getInstagramDashboard(businessId: string): Promise<InstagramDashboardReport> {
+  return this.request(`/api/social/analytics/instagram/dashboard?businessId=${encodeURIComponent(businessId)}`)
+}
+
+async getInstagramFollowers(businessId: string): Promise<InstagramFollowersResponse> {
+  return this.request(`/api/social/analytics/instagram/followers?businessId=${encodeURIComponent(businessId)}`)
+}
+
+async getInstagramEngagement(businessId: string): Promise<InstagramEngagementResponse> {
+  return this.request(`/api/social/analytics/instagram/engagement?businessId=${encodeURIComponent(businessId)}`)
+}
+
+async getInstagramProfileViews(businessId: string): Promise<InstagramProfileViewsResponse> {
+  return this.request(`/api/social/analytics/instagram/profile-views?businessId=${encodeURIComponent(businessId)}`)
+}
+
+async getInstagramPosts(businessId: string): Promise<InstagramPostsResponse> {
+  return this.request(`/api/social/analytics/instagram/posts?businessId=${encodeURIComponent(businessId)}`)
+}
 }
 
 export const apiClient = new ApiClient()

@@ -1,204 +1,260 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Facebook, Instagram, CheckCircle, Clock, XCircle, Eye, Trash2, RefreshCw } from "lucide-react"
-import Link from "next/link"
-import { apiClient, type PostHistoryItem } from "@/lib/api"
+import { useState } from 'react'
+import useSWR from 'swr'
+import { apiClient, type FbPage } from '@/lib/api'
+
+// Define the post type based on your Facebook API response
+interface FacebookPost {
+  id: string;
+  full_picture?: string;
+  message?: string;
+  created_time: string;
+}
+
+// Mock data for the existing history table (keeping your dummy data)
+const mockHistory = [
+  {
+    id: 1,
+    content: "Check out our latest product launch! 🚀",
+    platforms: ["Facebook", "Instagram", "Twitter"],
+    createdAt: new Date("2024-01-15"),
+    status: "Published",
+    engagement: { likes: 45, shares: 12, comments: 8 }
+  },
+  {
+    id: 2,
+    content: "Behind the scenes of our team meeting",
+    platforms: ["Instagram"],
+    createdAt: new Date("2024-01-14"),
+    status: "Published", 
+    engagement: { likes: 23, shares: 5, comments: 3 }
+  },
+  {
+    id: 3,
+    content: "Weekend motivation quote ✨",
+    platforms: ["Facebook", "Twitter"],
+    createdAt: new Date("2024-01-13"),
+    status: "Scheduled",
+    engagement: { likes: 0, shares: 0, comments: 0 }
+  }
+];
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString()
+}
+
+function formatEngagement(engagement: any) {
+  return `${engagement.likes}👍 ${engagement.shares}🔄 ${engagement.comments}💬`
+}
 
 export default function HistoryPage() {
-  const [posts, setPosts] = useState<PostHistoryItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Facebook posts state and data fetching
+  const { data: pagesResp } = useSWR("fb-pages", () => apiClient.getFacebookPagesAnalytics())
+  const pages: FbPage[] = pagesResp?.data ?? []
+  const [pageId, setPageId] = useState("")
 
-  const fetchPostHistory = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      console.log("[v0] Fetching post history...")
-      const historyData = await apiClient.getPostHistory(1, 50) // Get more posts for history view
-      setPosts(historyData.posts)
-      console.log("[v0] Post history loaded:", historyData.posts.length, "posts")
-    } catch (error) {
-      console.error("[v0] Failed to fetch post history:", error)
-      setError("Failed to load post history. Please try again.")
-      // Fallback to mock data if API fails
-      setPosts([
-        {
-          id: "1",
-          content: "New product launch announcement with exciting features",
-          platforms: ["Instagram"],
-          status: "Posted",
-          createdAt: "2024-01-15T10:00:00Z",
-          scheduledAt: null,
-          engagement: { instagram: { likes: 1200, comments: 45, shares: 23 } },
-        },
-        {
-          id: "2",
-          content: "Behind the scenes content from our latest photoshoot",
-          platforms: ["Facebook"],
-          status: "Scheduled",
-          createdAt: "2024-01-14T15:30:00Z",
-          scheduledAt: "2024-01-16T09:00:00Z",
-          engagement: null,
-        },
-      ])
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Set default page when pages load
+  useState(() => {
+    if (!pageId && pages?.length) setPageId(pages[0].id)
+  }, [pages, pageId])
 
-  useEffect(() => {
-    fetchPostHistory()
-  }, [])
+  const { data: posts, isLoading: postsLoading } = useSWR(
+    pageId ? ['fb-posts', pageId] : null,
+    () => apiClient.getFacebookPagePosts({ pageId, limit: 10 })
+  )
 
-  const handleDeletePost = async (postId: string) => {
-    try {
-      await apiClient.cancelScheduledPost(postId)
-      // Refresh the list after deletion
-      fetchPostHistory()
-    } catch (error) {
-      console.error("[v0] Failed to delete post:", error)
-    }
-  }
-
-  const formatEngagement = (engagement: PostHistoryItem["engagement"]) => {
-    if (!engagement) return "-"
-
-    const totalLikes = (engagement.instagram?.likes || 0) + (engagement.facebook?.likes || 0)
-    const totalComments = (engagement.instagram?.comments || 0) + (engagement.facebook?.comments || 0)
-
-    if (totalLikes === 0 && totalComments === 0) return "-"
-
-    return `${totalLikes} likes, ${totalComments} comments`
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-  }
+  const [openPost, setOpenPost] = useState<string | null>(null)
+  const { data: postDetails } = useSWR(
+    openPost ? ['fb-post', openPost] : null,
+    () => apiClient.getFacebookPostDetails(openPost!)
+  )
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              </Link>
-              <h1 className="text-2xl font-black font-serif text-primary">Post History</h1>
-            </div>
-            <Button variant="outline" size="sm" onClick={fetchPostHistory} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
+    <div className="container mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-8">Post History</h1>
+      
+      {/* Existing History Table Section */}
+      <div className="mb-12">
+        <h2 className="text-xl font-semibold mb-4">Scheduled & Published Posts</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-300 rounded-lg shadow-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Content</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Platform</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Engagement</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {mockHistory.map((post) => (
+                <tr key={post.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{post.content}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-wrap gap-1">
+                      {post.platforms.map((platform, index) => (
+                        <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {platform === "Instagram" && "📷"} {platform}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(post.createdAt)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                      post.status === "Published" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                    }`}>
+                      {post.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatEngagement(post.engagement)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {post.status === "Scheduled" && (
+                      <button className="text-red-600 hover:text-red-900 mr-3">Cancel</button>
+                    )}
+                    <button className="text-blue-600 hover:text-blue-900">View</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </header>
+      </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <Card className="border-border">
-          <CardHeader>
-            <CardTitle className="font-serif">Post History</CardTitle>
-            <CardDescription>Track all your social media posts and their current status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-muted-foreground">Loading post history...</div>
+      {/* Facebook Recent Posts Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold">Facebook Recent Posts</h2>
+          {pages.length > 0 && (
+            <select 
+              value={pageId} 
+              onChange={(e) => setPageId(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a Facebook page</option>
+              {pages.map((page) => (
+                <option key={page.id} value={page.id}>
+                  {page.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {!pageId ? (
+          <div className="text-center py-8 text-gray-500">
+            Select a Facebook page to view recent posts
+          </div>
+        ) : postsLoading ? (
+          <div className="text-center py-8 text-gray-500">
+            Loading posts...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {(posts?.data ?? []).map((p: FacebookPost) => (
+              <div key={p.id} className="border border-gray-200 rounded-lg p-4 flex items-start space-x-4 hover:bg-gray-50 transition-colors">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {p.full_picture ? (
+                  <img 
+                    src={p.full_picture} 
+                    alt="Post image" 
+                    className="w-16 h-16 object-cover rounded-lg flex-shrink-0" 
+                  />
+                ) : (
+                  <div className="w-16 h-16 bg-gray-100 flex items-center justify-center rounded-lg flex-shrink-0">
+                    <span className="text-gray-400 text-xs">No Image</span>
+                  </div>
+                )}
+                
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900 mb-2 line-clamp-3">
+                    {p.message || "No message content"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(p.created_time).toLocaleString()}
+                  </p>
+                </div>
+                
+                <button 
+                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors flex-shrink-0" 
+                  onClick={() => setOpenPost(p.id)}
+                >
+                  View Details
+                </button>
               </div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-destructive">{error}</div>
-              </div>
-            ) : posts.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-muted-foreground">No posts found. Create your first post!</div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 font-medium">Content</th>
-                      <th className="text-left py-3 px-4 font-medium">Platform</th>
-                      <th className="text-left py-3 px-4 font-medium">Date</th>
-                      <th className="text-left py-3 px-4 font-medium">Status</th>
-                      <th className="text-left py-3 px-4 font-medium">Engagement</th>
-                      <th className="text-left py-3 px-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {posts.map((post) => (
-                      <tr key={post.id} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-3 px-4">
-                          <div className="max-w-xs truncate">{post.content}</div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            {post.platforms.map((platform, index) => (
-                              <div key={index} className="flex items-center space-x-1">
-                                {platform === "Instagram" && <Instagram className="h-4 w-4 text-pink-600" />}
-                                {platform === "Facebook" && <Facebook className="h-4 w-4 text-blue-600" />}
-                                <span className="text-sm">{platform}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-muted-foreground">{formatDate(post.createdAt)}</td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={
-                              post.status === "Posted"
-                                ? "default"
-                                : post.status === "Scheduled"
-                                  ? "secondary"
-                                  : "destructive"
-                            }
-                            className="flex items-center gap-1 w-fit"
-                          >
-                            {post.status === "Posted" && <CheckCircle className="h-3 w-3" />}
-                            {post.status === "Scheduled" && <Clock className="h-3 w-3" />}
-                            {post.status === "Failed" && <XCircle className="h-3 w-3" />}
-                            {post.status}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-muted-foreground">{formatEngagement(post.engagement)}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {post.status === "Scheduled" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive/80"
-                                onClick={() => handleDeletePost(post.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ))}
+            
+            {posts?.data?.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No posts found for this page
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </div>
+
+      {/* Modal for Facebook post details */}
+      {openPost && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Post Details</h3>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  onClick={() => setOpenPost(null)}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {!postDetails ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Loading post details...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {postDetails?.post_details?.full_picture && (
+                    <img 
+                      src={postDetails.post_details.full_picture} 
+                      alt="Post detail image" 
+                      className="w-full rounded-lg shadow-sm"
+                    />
+                  )}
+                  
+                  <div className="prose max-w-none">
+                    <p className="text-gray-900 whitespace-pre-wrap">
+                      {postDetails?.post_details?.message || "No message content"}
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end pt-4 border-t border-gray-200">
+                    <button 
+                      className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                      onClick={() => setOpenPost(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

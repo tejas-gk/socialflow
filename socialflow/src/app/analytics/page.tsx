@@ -1,464 +1,92 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { TrendingUp, Facebook, Instagram, Users, Eye, Heart, MessageCircle, Share, Calendar } from "lucide-react"
-import {
-  apiClient,
-  type AuthStatus,
-  type AnalyticsOverview,
-  type FacebookPage,
-  type InstagramAccount,
-} from "../../lib/api"
-
-interface FacebookPost {
-  id: string
-  message?: string
-  created_time?: string
-  full_picture?: string
-  permalink_url?: string
-}
-
-interface FacebookInsights {
-  report: {
-    pageLikes: { data: Array<{ values: Array<{ value: number; end_time?: string }> }> }
-    pageReach: { data: Array<{ values: Array<{ value: number; end_time?: string }> }> }
-    totalEngagement: { data: Array<{ values: Array<{ value: number; end_time?: string }> }> }
-    pageImpressions: { data: Array<{ values: Array<{ value: number; end_time?: string }> }> }
-  }
-}
+import { useEffect, useState } from 'react'
+import useSWR from 'swr'
+import { apiClient } from '@/lib/api'
+import FacebookAnalytics from '@/components/analytics/facebook-analytics'
+import InstagramAnalytics from '@/components/analytics/instagram-analytics'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ArrowLeft, Facebook, Instagram, TrendingUp, Wifi, BarChart3 } from 'lucide-react'
+import Link from 'next/link'
 
 export default function AnalyticsPage() {
-  const [authStatus, setAuthStatus] = useState<AuthStatus>({ facebook: false, instagram: false })
-  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null)
-  const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
-  const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
-  const [facebookPages, setFacebookPages] = useState<FacebookPage[]>([])
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccount[]>([])
-  const [facebookPosts, setFacebookPosts] = useState<FacebookPost[]>([])
-  const [facebookInsights, setFacebookInsights] = useState<FacebookInsights | null>(null)
-  const [activeTab, setActiveTab] = useState<'facebook' | 'instagram'>('facebook')
-  const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('overview')
+  
+  // Check connection status for both platforms
+  const { data: connectionStatus } = useSWR(
+    'connection-status',
+    () => apiClient.getConnectionStatus(),
+    { refreshInterval: 30000 } // Refresh every 30 seconds
+  )
 
-  const isCurrentPlatformConnected = activeTab === 'facebook' 
-    ? (authStatus.facebook && selectedFacebookPage) 
-    : (authStatus.instagram && selectedInstagramAccount)
+  // Check for Instagram accounts
+  const { data: instagramAccounts } = useSWR(
+    'ig-accounts',
+    () => apiClient.getInstagramAccountsAnalytics().catch(() => ({ data: [] }))
+  )
 
-  const fetchAuthStatus = async () => {
-    try {
-      const status = await apiClient.getAuthStatus()
-      setAuthStatus(status)
-    } catch (error) {
-      console.error("Failed to fetch auth status:", error)
-    }
-  }
+  // Check for Facebook pages
+  const { data: facebookPages } = useSWR(
+    'fb-pages',
+    () => apiClient.getFacebookPagesAnalytics().catch(() => ({ data: [] }))
+  )
 
-  const fetchSelectedFacebookPage = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/auth/facebook/selected-page')
-      if (response.ok) {
-        const pageData = await response.json()
-        setSelectedFacebookPage(pageData)
-      }
-    } catch (error) {
-      console.error("Failed to fetch selected Facebook page:", error)
-    }
-  }
+  const hasInstagramAccounts = instagramAccounts?.data?.length > 0
+  const hasFacebookPages = facebookPages?.data?.length > 0
+  const isInstagramConnected = connectionStatus?.instagram?.connected
+  const isFacebookConnected = connectionStatus?.facebook?.connected
 
-  const fetchFacebookPages = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/auth/facebook/pages')
-      if (response.ok) {
-        const pages = await response.json()
-        setFacebookPages(Array.isArray(pages) ? pages : [pages])
-        
-        if (pages.length > 0 && !selectedFacebookPage) {
-          setSelectedFacebookPage(pages[0])
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch Facebook pages:", error)
-    }
-  }
-
-  const fetchFacebookInsights = async (pageId: string) => {
-    try {
-      const response = await fetch(`http://localhost:3001/api/social/analytics/facebook/page-insights?pageId=${pageId}`)
-      if (response.ok) {
-        const insights = await response.json()
-        setFacebookInsights(insights)
-      }
-    } catch (error) {
-      console.error("Failed to fetch Facebook insights:", error)
-    }
-  }
-
-  const fetchFacebookPosts = async (pageId: string) => {
-    try {
-      const response = await fetch(`http://localhost:3001/api/social/analytics/facebook/posts?pageId=${pageId}&limit=10`)
-      if (response.ok) {
-        const postsData = await response.json()
-        setFacebookPosts(postsData.data || [])
-      }
-    } catch (error) {
-      console.error("Failed to fetch Facebook posts:", error)
-    }
-  }
-
-  const fetchAnalytics = async () => {
-    if (!isCurrentPlatformConnected) {
-      setAnalytics(null)
-      return
-    }
-
-    try {
-      const params: { fbPageId?: string; igAccountId?: string } = {}
-      if (activeTab === 'facebook' && selectedFacebookPage) {
-        // Pass only the page ID as a string
-        params.fbPageId = selectedFacebookPage.id
-      } else if (activeTab === 'instagram' && selectedInstagramAccount) {
-        params.igAccountId = selectedInstagramAccount.id
-      }
-
-      console.log("Fetching analytics with params:", params)
-      const analyticsData = await apiClient.getAnalyticsOverview(params)
-      setAnalytics(analyticsData)
-    } catch (error) {
-      console.error("Failed to fetch analytics:", error)
-    }
-  }
-
-  const handleFacebookPageChange = async (pageId: string) => {
-    const page = facebookPages.find(p => p.id === pageId)
-    if (page) {
-      setSelectedFacebookPage(page)
-      
-      // Update selected page on backend
-      try {
-        await fetch('http://localhost:3001/auth/facebook/select-page', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ pageId }),
-        })
-      } catch (error) {
-        console.error("Failed to update selected page:", error)
-      }
-
-      // Fetch data for the new page sequentially
-      try {
-        await fetchFacebookInsights(pageId)
-        await fetchFacebookPosts(pageId)
-        await fetchAnalytics()
-      } catch (error) {
-        console.error("Failed to fetch page data:", error)
-      }
-    }
-  }
-
+  // Auto-switch to first available platform if overview is selected but no data
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true)
-      await fetchAuthStatus()
-      setIsLoading(false)
-    }
-    fetchData()
-  }, [])
-
-  useEffect(() => {
-    if (authStatus.facebook && activeTab === 'facebook') {
-      Promise.all([
-        fetchSelectedFacebookPage(),
-        fetchFacebookPages()
-      ])
-    }
-  }, [authStatus, activeTab])
-
-  useEffect(() => {
-    if (selectedFacebookPage && activeTab === 'facebook') {
-      // Fetch data sequentially instead of in parallel
-      const fetchSequentially = async () => {
-        try {
-          await fetchFacebookInsights(selectedFacebookPage.id)
-          await fetchFacebookPosts(selectedFacebookPage.id)
-          await fetchAnalytics()
-        } catch (error) {
-          console.error("Failed to fetch Facebook data:", error)
-        }
+    if (activeTab === 'overview') {
+      if (isFacebookConnected && hasFacebookPages) {
+        // Stay on overview - we have data to show
+      } else if (isInstagramConnected && hasInstagramAccounts) {
+        // Stay on overview - we have data to show
       }
-      fetchSequentially()
     }
-  }, [selectedFacebookPage, activeTab])
-
-  const sumInsightValues = (insightData: Array<{ values: Array<{ value: number }> }>) => {
-    return insightData.reduce((total, item) => {
-      return total + item.values.reduce((sum, val) => sum + (val.value || 0), 0)
-    }, 0)
-  }
-
-  const renderFacebookAnalytics = () => {
-    if (!authStatus.facebook) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Facebook className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Connect Facebook Account</h3>
-          <p className="text-muted-foreground text-center mb-4">
-            Connect your Facebook account to view detailed analytics and insights.
-          </p>
-          <Button 
-            onClick={() => window.open(apiClient.getFacebookAuthUrl(), "_blank")}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Facebook className="h-4 w-4 mr-2" />
-            Connect Facebook
-          </Button>
-        </div>
-      )
-    }
-
-    const fbData = analytics?.platformBreakdown?.facebook
-    const pageReach = fbData?.reach || 0
-    const totalEngagement = fbData?.engagement || 0
-    const pageFollowers = fbData?.followers || 0
-    const weeklyGrowth = analytics?.weeklyGrowth
-
-    return (
-      <div className="space-y-6">
-        {/* Page Selection */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Facebook className="h-5 w-5 text-blue-600" />
-                <div>
-                  <CardTitle>Facebook Page Analytics</CardTitle>
-                  <CardDescription>Select a page to view its analytics</CardDescription>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                {facebookPages.length > 0 && (
-                  <Select
-                    value={selectedFacebookPage?.id || ""}
-                    onValueChange={handleFacebookPageChange}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select a page" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {facebookPages.map((page) => (
-                        <SelectItem key={page.id} value={page.id}>
-                          {page.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Badge variant="default">Connected</Badge>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {selectedFacebookPage && (
-          <>
-            {/* Overview Stats */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Page Reach</CardTitle>
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {pageReach.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    +{weeklyGrowth?.reach?.toFixed(1) || "—"}% from last week
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Engagement</CardTitle>
-                  <Heart className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {totalEngagement.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    +{weeklyGrowth?.engagement?.toFixed(1) || "—"}% from last week
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Page Followers</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {pageFollowers.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    +{weeklyGrowth?.followers?.toFixed(1) || "—"}% from last week
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Reach</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analytics?.totalReach?.toLocaleString() || "—"}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Combined platforms
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Top Performing Post */}
-            {analytics?.topPerformingPost && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Performing Post</CardTitle>
-                  <CardDescription>Your best performing post this period</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <p className="text-sm">{analytics.topPerformingPost.content}</p>
-                    <div className="flex space-x-6 text-sm text-muted-foreground">
-                      <span className="flex items-center">
-                        <Heart className="h-4 w-4 mr-1" />
-                        {analytics.topPerformingPost.likes} likes
-                      </span>
-                      <span className="flex items-center">
-                        <MessageCircle className="h-4 w-4 mr-1" />
-                        {analytics.topPerformingPost.comments} comments
-                      </span>
-                      <span className="flex items-center">
-                        <Share className="h-4 w-4 mr-1" />
-                        {analytics.topPerformingPost.shares} shares
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Recent Posts */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Posts</CardTitle>
-                <CardDescription>Latest posts from {selectedFacebookPage.name}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {facebookPosts.length > 0 ? (
-                    facebookPosts.map((post) => (
-                      <div key={post.id} className="border rounded-lg p-4 hover:bg-muted/50">
-                        <div className="flex items-start space-x-4">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Facebook className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium">{selectedFacebookPage.name}</h4>
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Calendar className="h-4 w-4 mr-1" />
-                                {post.created_time ? new Date(post.created_time).toLocaleDateString() : 'Unknown date'}
-                              </div>
-                            </div>
-                            <p className="text-sm text-gray-700">
-                              {post.message || "No message content"}
-                            </p>
-                            {post.full_picture && (
-                              <div className="mt-2">
-                                <img 
-                                  src={post.full_picture} 
-                                  alt="Post image" 
-                                  className="rounded-lg max-w-md max-h-48 object-cover"
-                                />
-                              </div>
-                            )}
-                            <div className="flex space-x-6 text-sm text-muted-foreground">
-                              <span className="flex items-center">
-                                <Heart className="h-4 w-4 mr-1" />
-                                View details
-                              </span>
-                              {post.permalink_url && (
-                                <a 
-                                  href={post.permalink_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="flex items-center hover:text-blue-600"
-                                >
-                                  <Share className="h-4 w-4 mr-1" />
-                                  View on Facebook
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No posts found for this page</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
-    )
-  }
-
-  const renderInstagramAnalytics = () => {
-    if (!authStatus.instagram || !selectedInstagramAccount) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Instagram className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Connect Instagram Account</h3>
-          <p className="text-muted-foreground text-center mb-4">
-            Connect and select an Instagram business account to view detailed analytics and insights.
-          </p>
-          <Button 
-            onClick={() => window.open(apiClient.getInstagramAuthUrl(), "_blank")}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-          >
-            <Instagram className="h-4 w-4 mr-2" />
-            Connect Instagram
-          </Button>
-        </div>
-      )
-    }
-
-    return <div>Instagram analytics coming soon...</div>
-  }
+  }, [activeTab, isFacebookConnected, hasFacebookPages, isInstagramConnected, hasInstagramAccounts])
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Navigation Header - Matching Dashboard Style */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
-              <p className="text-muted-foreground">Monitor your social media performance</p>
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
+              <h1 className="text-2xl font-black font-serif text-primary">Analytics Dashboard</h1>
+              <Badge variant="secondary" className="hidden md:inline-flex">
+                Pro
+              </Badge>
+            </div>
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <Button
+                size="sm"
+                className={`${isFacebookConnected ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
+                onClick={() => window.location.href = '/connections'}
+                title={isFacebookConnected ? "Facebook Connected" : "Connect Facebook"}
+              >
+                <Facebook className="h-4 w-4 mr-2" />
+                Facebook
+              </Button>
+              <Button
+                size="sm"
+                className={`${isInstagramConnected ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
+                onClick={() => window.location.href = '/connections'}
+                title={isInstagramConnected ? "Instagram Connected" : "Connect Instagram"}
+              >
+                <Instagram className="h-4 w-4 mr-2" />
+                Instagram
+              </Button>
             </div>
           </div>
         </div>
@@ -466,43 +94,286 @@ export default function AnalyticsPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-8">
-          <div className="flex space-x-1 rounded-lg bg-muted p-1">
-            <button
-              onClick={() => setActiveTab('facebook')}
-              className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === 'facebook'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Facebook className="h-4 w-4 mr-2" />
-              Facebook
-            </button>
-            <button
-              onClick={() => setActiveTab('instagram')}
-              className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === 'instagram'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Instagram className="h-4 w-4 mr-2" />
-              Instagram
-            </button>
+          {/* Page Header */}
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold font-serif">Analytics Overview</h2>
+            <p className="text-muted-foreground">Monitor your social media performance across all platforms.</p>
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">Loading analytics...</div>
-            </div>
-          ) : (
-            <>
-              {activeTab === 'facebook' && renderFacebookAnalytics()}
-              {activeTab === 'instagram' && renderInstagramAnalytics()}
-            </>
-          )}
+          {/* Quick Stats - Dashboard Style Cards */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="hover:shadow-lg transition-all duration-200 border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Facebook Pages</CardTitle>
+                <Facebook className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  {isFacebookConnected ? (hasFacebookPages ? facebookPages.data.length : '0') : 'Not Connected'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isFacebookConnected ? 'Pages available' : 'Connect to view pages'}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-all duration-200 border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Instagram Accounts</CardTitle>
+                <Instagram className="h-4 w-4 text-pink-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  {isInstagramConnected ? (hasInstagramAccounts ? instagramAccounts.data.length : '0') : 'Not Connected'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isInstagramConnected ? 'Accounts available' : 'Connect to view accounts'}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-all duration-200 border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Connection Status</CardTitle>
+                <Wifi className="h-4 w-4 text-accent" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-accent">
+                  {(isFacebookConnected ? 1 : 0) + (isInstagramConnected ? 1 : 0)} / 2
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isFacebookConnected && isInstagramConnected ? 'All platforms connected' : 'Some platforms need connection'}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-all duration-200 border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Analytics Health</CardTitle>
+                <TrendingUp className="h-4 w-4 text-accent" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  {(hasFacebookPages || hasInstagramAccounts) ? 'Active' : 'Inactive'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {(hasFacebookPages || hasInstagramAccounts) ? 'Data available' : 'Connect accounts first'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabbed Analytics Section */}
+          <Card className="border-border">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="h-5 w-5 text-accent" />
+                  <CardTitle className="font-serif">Platform Analytics</CardTitle>
+                </div>
+              </div>
+              <CardDescription>
+                Detailed analytics and insights for your connected social media platforms.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsTrigger value="overview" className="flex items-center space-x-2">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Overview</span>
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="facebook" 
+                    disabled={!isFacebookConnected || !hasFacebookPages}
+                    className="flex items-center space-x-2"
+                  >
+                    <Facebook className="h-4 w-4" />
+                    <span>Facebook</span>
+                    {hasFacebookPages && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {facebookPages.data.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="instagram" 
+                    disabled={!isInstagramConnected || !hasInstagramAccounts}
+                    className="flex items-center space-x-2"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    <span>Instagram</span>
+                    {hasInstagramAccounts && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {instagramAccounts.data.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="space-y-6 mt-0">
+                  <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+                    {/* Facebook Overview */}
+                    <Card className="border-border">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Facebook className="h-5 w-5 text-blue-600" />
+                            <CardTitle className="text-lg">Facebook</CardTitle>
+                          </div>
+                          <div className={`w-3 h-3 rounded-full ${isFacebookConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Status: {isFacebookConnected ? 
+                              <span className="text-green-600 font-medium">Connected</span> : 
+                              <span className="text-red-600 font-medium">Not Connected</span>
+                            }
+                          </p>
+                          {isFacebookConnected && (
+                            <p className="text-sm text-muted-foreground">
+                              Pages: {hasFacebookPages ? facebookPages.data.length : 0}
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-4">
+                          {isFacebookConnected && hasFacebookPages ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setActiveTab('facebook')}
+                            >
+                              View Analytics
+                            </Button>
+                          ) : (
+                            <Button 
+                              size="sm"
+                              onClick={() => window.location.href = '/connections'}
+                            >
+                              {!isFacebookConnected ? 'Connect Facebook' : 'Add Pages'}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Instagram Overview */}
+                    <Card className="border-border">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Instagram className="h-5 w-5 text-pink-600" />
+                            <CardTitle className="text-lg">Instagram</CardTitle>
+                          </div>
+                          <div className={`w-3 h-3 rounded-full ${isInstagramConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Status: {isInstagramConnected ? 
+                              <span className="text-green-600 font-medium">Connected</span> : 
+                              <span className="text-red-600 font-medium">Not Connected</span>
+                            }
+                          </p>
+                          {isInstagramConnected && (
+                            <p className="text-sm text-muted-foreground">
+                              Accounts: {hasInstagramAccounts ? instagramAccounts.data.length : 0}
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-4">
+                          {isInstagramConnected && hasInstagramAccounts ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setActiveTab('instagram')}
+                            >
+                              View Analytics
+                            </Button>
+                          ) : (
+                            <Button 
+                              size="sm"
+                              onClick={() => window.location.href = '/connections'}
+                            >
+                              {!isInstagramConnected ? 'Connect Instagram' : 'Add Accounts'}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="facebook" className="mt-0">
+                  {isFacebookConnected && hasFacebookPages ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold">Facebook Analytics</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Analytics for {facebookPages.data.length} Facebook {facebookPages.data.length === 1 ? 'page' : 'pages'}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">
+                          {facebookPages.data.length} {facebookPages.data.length === 1 ? 'page' : 'pages'}
+                        </Badge>
+                      </div>
+                      <FacebookAnalytics />
+                    </div>
+                  ) : (
+                    <EmptyState platform="Facebook" />
+                  )}
+                </TabsContent>
+
+                <TabsContent value="instagram" className="mt-0">
+                  {isInstagramConnected && hasInstagramAccounts ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold">Instagram Analytics</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Analytics for {instagramAccounts.data.length} Instagram {instagramAccounts.data.length === 1 ? 'account' : 'accounts'}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">
+                          {instagramAccounts.data.length} {instagramAccounts.data.length === 1 ? 'account' : 'accounts'}
+                        </Badge>
+                      </div>
+                      <InstagramAnalytics />
+                    </div>
+                  ) : (
+                    <EmptyState platform="Instagram" />
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
       </div>
+    </div>
+  )
+}
+
+function EmptyState({ platform }: { platform: string }) {
+  const Icon = platform === 'Facebook' ? Facebook : Instagram
+  const colorClass = platform === 'Facebook' ? 'text-blue-600' : 'text-pink-600'
+  const bgClass = platform === 'Facebook' ? 'bg-blue-50' : 'bg-gradient-to-r from-purple-50 to-pink-50'
+
+  return (
+    <div className="flex flex-col items-center justify-center py-12">
+      <div className={`w-16 h-16 ${bgClass} rounded-full flex items-center justify-center mb-4`}>
+        <Icon className={`w-8 h-8 ${colorClass}`} />
+      </div>
+      <h3 className="text-xl font-semibold mb-2">No {platform} Data</h3>
+      <p className="text-muted-foreground text-center mb-4">
+        Connect your {platform} account and add {platform === 'Facebook' ? 'pages' : 'business accounts'} to view analytics.
+      </p>
+      <Button onClick={() => window.location.href = '/connections'}>
+        Manage Connections
+      </Button>
     </div>
   )
 }
