@@ -12,6 +12,10 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Ensure request.body is not null
+    if (!request.body) {
+      return NextResponse.json({ error: "Request body is required" }, { status: 400 });
+    }
     // Upload the raw request body (file) directly to Vercel Blob
     const blob = await put(filename, request.body, {
       access: "public",
@@ -20,7 +24,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(blob);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Upload failed" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -41,7 +41,15 @@ export default function CampaignPage() {
   const [postContent, setPostContent] = useState("")
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [isPosting, setIsPosting] = useState(false)
-  const [postResult, setPostResult] = useState<any>(null)
+  type PostResult = {
+    error?: string
+    scheduled?: boolean
+    scheduledFor?: string
+    facebook?: { success?: boolean }
+    instagram?: { success?: boolean }
+    [key: string]: unknown
+  }
+  const [postResult, setPostResult] = useState<PostResult | null>(null)
 
   // Schedule Post States
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)

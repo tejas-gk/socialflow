@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
-function number(v: any) {
+function number(v: unknown) {
   if (v == null) return 0
   if (typeof v === "number") return v
   const n = Number(v)
@@ -35,7 +35,8 @@ export default function FacebookAnalytics() {
   const timeseries = useMemo(() => {
     const values =
       insights?.report?.pageLikes?.data?.[0]?.values ?? insights?.report?.pageReach?.data?.[0]?.values ?? []
-    return values.map((v: any) => ({
+    type FbInsightValue = { end_time?: string; value?: number | string | null };
+    return values.map((v: FbInsightValue) => ({
       date: v.end_time?.slice(0, 10),
       value: number(v.value),
     }))
@@ -106,7 +107,12 @@ export default function FacebookAnalytics() {
             <div className="text-sm text-muted-foreground">Loading posts…</div>
           ) : (
             <div className="flex flex-col gap-3">
-              {(posts?.data ?? []).map((p: any) => (
+              {(posts?.data ?? []).map((p: {
+                id: string;
+                full_picture?: string;
+                message?: string;
+                created_time: string;
+              }) => (
                 <div key={p.id} className="flex items-center justify-between border rounded-md p-3">
                   <div className="flex items-center gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -170,7 +176,7 @@ export default function FacebookAnalytics() {
   )
 }
 
-function MetricCard({ title, value }: { title: string; value: any }) {
+function MetricCard({ title, value }: { title: string; value: number | string }) {
   return (
     <Card>
       <CardHeader className="py-3">

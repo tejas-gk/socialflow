@@ -115,7 +115,7 @@ export default function AnalyticsPage() {
     }
 
     try {
-      const params: any = {}
+      const params: { fbPageId?: string; igAccountId?: string } = {}
       if (activeTab === 'facebook' && selectedFacebookPage) {
         // Pass only the page ID as a string
         params.fbPageId = selectedFacebookPage.id

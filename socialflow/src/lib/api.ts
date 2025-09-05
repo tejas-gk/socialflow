@@ -143,6 +143,102 @@ export type UploadResponse = {
   files: UploadedFileInfo[]
 }
 
+// **NEW TYPE DEFINITIONS FOR FACEBOOK ANALYTICS**
+export interface FacebookPageInsights {
+  report: {
+    pageLikes: {
+      data: Array<{
+        values: Array<{
+          end_time?: string;
+          value?: number | string | null;
+        }>;
+      }>;
+    };
+    pageReach: {
+      data: Array<{
+        values: Array<{
+          end_time?: string;
+          value?: number | string | null;
+        }>;
+      }>;
+    };
+    totalEngagement: {
+      data: Array<{
+        values: Array<{
+          end_time?: string;
+          value?: number | string | null;
+        }>;
+      }>;
+    };
+  };
+}
+
+export interface FacebookPost {
+  id: string;
+  message?: string;
+  full_picture?: string;
+  created_time: string;
+}
+
+export interface FacebookPostsResponse {
+  data: FacebookPost[];
+}
+
+export interface FacebookPostDetails {
+  post_details: {
+    id: string;
+    message?: string;
+    full_picture?: string;
+    created_time: string;
+  };
+  post_stats: {
+    post_impressions?: number;
+    post_impressions_unique?: number;
+    total_reactions?: number;
+    total_comments?: number;
+    total_shares?: number;
+    total_clicks?: number;
+    total_engagements?: number;
+    engagement_rate?: number;
+  };
+}
+
+// **NEW TYPE DEFINITIONS FOR INSTAGRAM ANALYTICS**
+export interface InstagramMedia {
+  id: string;
+  media_type: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  caption?: string;
+  timestamp: string;
+  permalink: string;
+}
+
+export interface InstagramMediaResponse {
+  data: InstagramMedia[];
+}
+
+export interface InstagramMediaDetails {
+  media_details: {
+    id: string;
+    media_type: string;
+    media_url?: string;
+    thumbnail_url?: string;
+    caption?: string;
+    timestamp: string;
+    permalink: string;
+  };
+  media_stats: {
+    impressions?: number;
+    reach?: number;
+    engagement?: number;
+    likes?: number;
+    comments?: number;
+    shares?: number;
+    saves?: number;
+  };
+}
+
 // Connection Status Types
 export interface ConnectionStatus {
   facebook: {
@@ -391,13 +487,13 @@ class ApiClient {
     })
   }
 
-  // Helper functions for Facebook analytics endpoints used by UI
+  // **UPDATED FACEBOOK ANALYTICS METHODS WITH CORRECT TYPES**
   async getFacebookPagesAnalytics(): Promise<{ data: FacebookPage[] }> {
-    const pages = await this.request("/api/social/analytics/facebook/pages")
+    const pages = await this.request<FacebookPage[]>("/api/social/analytics/facebook/pages")
     return { data: pages }
   }
 
-  async getFacebookPageInsights(pageId: string): Promise<any> {
+  async getFacebookPageInsights(pageId: string): Promise<FacebookPageInsights> {
     return this.request(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
   }
 
@@ -409,7 +505,7 @@ class ApiClient {
     fromDate?: string
     toDate?: string
     limit?: number
-  }): Promise<any> {
+  }): Promise<FacebookPostsResponse> {
     const q = new URLSearchParams()
     q.set("pageId", params.pageId)
     if (params.after) q.set("after", params.after)
@@ -421,7 +517,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/facebook/posts?${q.toString()}`)
   }
 
-  async getFacebookPostDetails(postId: string): Promise<any> {
+  async getFacebookPostDetails(postId: string): Promise<FacebookPostDetails> {
     return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}`)
   }
 
@@ -434,12 +530,12 @@ class ApiClient {
     return this.request("/api/social/connection-status")
   }
 
-  // Instagram Analytics methods
+  // **UPDATED INSTAGRAM ANALYTICS METHODS WITH CORRECT TYPES**
   async getInstagramAccountsAnalytics(): Promise<InstagramAccount[]> {
     return this.request("/api/social/analytics/instagram/accounts")
   }
 
-  async getInstagramAccountInsights(accountId: string): Promise<any> {
+  async getInstagramAccountInsights(accountId: string): Promise<InstagramDetails> {
     return this.request(`/api/social/analytics/instagram/account-insights?accountId=${encodeURIComponent(accountId)}`)
   }
 
@@ -447,7 +543,7 @@ class ApiClient {
     accountId: string
     after?: string
     limit?: number
-  }): Promise<any> {
+  }): Promise<InstagramMediaResponse> {
     const q = new URLSearchParams()
     q.set("accountId", params.accountId)
     if (params.after) q.set("after", params.after)
@@ -455,7 +551,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/instagram/media?${q.toString()}`)
   }
 
-  async getInstagramMediaDetails(mediaId: string): Promise<any> {
+  async getInstagramMediaDetails(mediaId: string): Promise<InstagramMediaDetails> {
     return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}`)
   }
 }

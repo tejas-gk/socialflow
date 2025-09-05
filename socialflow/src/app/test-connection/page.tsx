@@ -426,7 +426,7 @@ export default function TestConnectionPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>• Ensure your social media accounts are properly linked in the dashboard</p>
-              <p>• Check that API tokens haven't expired - they may need periodic renewal</p>
+              <p>• Check that API tokens haven&apos;t expired - they may need periodic renewal</p>
               <p>• Verify your internet connection is stable during testing</p>
               <p>• For Instagram, ensure your account is a Business account linked to a Facebook Page</p>
               <p>• Contact support if connections continue to fail after troubleshooting</p>
