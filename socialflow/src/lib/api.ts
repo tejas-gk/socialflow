@@ -12,7 +12,8 @@ export interface InstagramAccount {
   username?: string
   pageAccessToken?: string
   accessToken?: string; // Added this line
-
+followersCount:string;
+mediaCount:string;
 }
 
 export interface AuthStatus {
@@ -385,6 +386,7 @@ export interface InstagramMediaDetails {
     comments?: number;
     shares?: number;
     saves?: number;
+    
   };
 }
 

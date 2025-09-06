@@ -66,9 +66,11 @@ export default function InstagramAnalytics() {
     { shouldRetryOnError: false }
   );
 
+  type FollowerValue = { end_time?: string; value?: number };
+
   const followerTimeseries = useMemo(() => {
-    const values = followers?.new?.data?.[0]?.values ?? [];
-    return values.map((v: any) => ({
+    const values: FollowerValue[] = followers?.new?.data?.[0]?.values ?? [];
+    return values.map((v: FollowerValue) => ({
       date: v.end_time?.slice(0, 10),
       value: number(v.value),
     }));
@@ -223,7 +225,7 @@ export default function InstagramAnalytics() {
                 <MetricCard title="Comments" value={number(postDetails?.media_stats?.comments)} />
                 <MetricCard title="Impressions" value={number(postDetails?.media_stats?.impressions)} />
                 <MetricCard title="Reach" value={number(postDetails?.media_stats?.reach)} />
-                <MetricCard title="Saves" value={number(postDetails?.media_stats?.saved)} />
+                <MetricCard title="Saves" value={number(postDetails?.media_stats?.saves)} />
                 <MetricCard title="Engagement" value={number(postDetails?.media_stats?.engagement)} />
               </div>
             </div>

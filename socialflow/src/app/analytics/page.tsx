@@ -34,8 +34,8 @@ export default function AnalyticsPage() {
     () => apiClient.getFacebookPagesAnalytics().catch(() => ({ data: [] }))
   )
 
-  const hasInstagramAccounts = instagramAccounts?.length > 0
-  const hasFacebookPages = facebookPages?.data?.length > 0
+const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
+  const hasFacebookPages = (facebookPages?.data?.length ??0)> 0
   const isInstagramConnected = connectionStatus?.instagram?.connected
   const isFacebookConnected = connectionStatus?.facebook?.connected
 
@@ -111,7 +111,7 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">
-                  {isFacebookConnected ? (hasFacebookPages ? facebookPages.data.length : '0') : 'Not Connected'}
+                  {isFacebookConnected ? (hasFacebookPages ? facebookPages?.data?.length : '0') : 'Not Connected'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {isFacebookConnected ? 'Pages available' : 'Connect to view pages'}
@@ -126,7 +126,7 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">
-                  {isInstagramConnected ? (hasInstagramAccounts ? instagramAccounts.length : '0') : 'Not Connected'}
+                  {isInstagramConnected ? (hasInstagramAccounts ? instagramAccounts?.length : '0') : 'Not Connected'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {isInstagramConnected ? 'Accounts available' : 'Connect to view accounts'}
@@ -194,7 +194,7 @@ export default function AnalyticsPage() {
                     <span>Facebook</span>
                     {hasFacebookPages && (
                       <Badge variant="secondary" className="ml-1 text-xs">
-                        {facebookPages.data.length}
+                        {facebookPages?.data?.length ?? 0}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -207,7 +207,7 @@ export default function AnalyticsPage() {
                     <span>Instagram</span>
                     {hasInstagramAccounts && (
                       <Badge variant="secondary" className="ml-1 text-xs">
-                        {instagramAccounts.length}
+                        {instagramAccounts?.length ?? 0}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -236,7 +236,7 @@ export default function AnalyticsPage() {
                           </p>
                           {isFacebookConnected && (
                             <p className="text-sm text-muted-foreground">
-                              Pages: {hasFacebookPages ? facebookPages.data.length : 0}
+                              Pages: {hasFacebookPages ? facebookPages?.data?.length ?? 0 : 0}
                             </p>
                           )}
                         </div>
@@ -284,7 +284,7 @@ export default function AnalyticsPage() {
                           </p>
                           {isInstagramConnected && (
                             <p className="text-sm text-muted-foreground">
-                              Accounts: {hasInstagramAccounts ? instagramAccounts.length : 0}
+                              Accounts: {hasInstagramAccounts ? instagramAccounts?.length : 0}
                             </p>
                           )}
                         </div>
@@ -320,11 +320,11 @@ export default function AnalyticsPage() {
                         <div>
                           <h3 className="text-lg font-semibold">Facebook Analytics</h3>
                           <p className="text-sm text-muted-foreground">
-                            Analytics for {facebookPages.data.length} Facebook {facebookPages.data.length === 1 ? 'page' : 'pages'}
+                            Analytics for {facebookPages?.data?.length ?? 0} Facebook {(facebookPages?.data?.length === 1 ? 'page' : 'pages')}
                           </p>
                         </div>
                         <Badge variant="secondary">
-                          {facebookPages.data.length} {facebookPages.data.length === 1 ? 'page' : 'pages'}
+                          {facebookPages?.data?.length ?? 0} {(facebookPages?.data?.length === 1 ? 'page' : 'pages')}
                         </Badge>
                       </div>
                       <FacebookAnalytics />
@@ -341,11 +341,11 @@ export default function AnalyticsPage() {
                         <div>
                           <h3 className="text-lg font-semibold">Instagram Analytics</h3>
                           <p className="text-sm text-muted-foreground">
-                            Analytics for {instagramAccounts.length} Instagram {instagramAccounts.length === 1 ? 'account' : 'accounts'}
+                            Analytics for {(instagramAccounts?.length ?? 0)} Instagram {(instagramAccounts?.length === 1 ? 'account' : 'accounts')}
                           </p>
                         </div>
                         <Badge variant="secondary">
-                          {instagramAccounts.length} {instagramAccounts.length === 1 ? 'account' : 'accounts'}
+                          {(instagramAccounts?.length ?? 0)} {(instagramAccounts?.length === 1 ? 'account' : 'accounts')}
                         </Badge>
                       </div>
                       <InstagramAnalytics />
