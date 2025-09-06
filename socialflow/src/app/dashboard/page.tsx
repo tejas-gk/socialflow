@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi, LogOut } from "lucide-react"
 import Link from "next/link"
+import useSWR from 'swr'
 import {
   apiClient,
   type AuthStatus,
-  type AnalyticsOverview,
-  type PostHistoryItem,
   type FacebookPage,
   type InstagramAccount,
+  type InstagramMedia,
+  type FacebookPost,
+  type AnalyticsOverview,
 } from "../../lib/api"
 import {
   Dialog,
@@ -20,13 +22,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 
 export default function DashboardPage() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ facebook: false, instagram: false })
-  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null)
-  const [recentPosts, setRecentPosts] = useState<PostHistoryItem[]>([])
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
   const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
   const [facebookPages, setFacebookPages] = useState<FacebookPage[]>([])
@@ -34,9 +33,19 @@ export default function DashboardPage() {
   const [showFacebookPageModal, setShowFacebookPageModal] = useState(false)
   const [showInstagramAccountModal, setShowInstagramAccountModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('facebook');
 
-  // Check if any social platform is connected
-  const isAnySocialConnected = authStatus.facebook || authStatus.instagram
+  // Fetch Facebook posts
+  const { data: fbPosts, isLoading: fbPostsLoading } = useSWR(
+    authStatus.facebook && selectedFacebookPage ? ['fb-posts', selectedFacebookPage.id] : null,
+    () => apiClient.getFacebookPagePosts({ pageId: selectedFacebookPage!.id, limit: 3 })
+  );
+
+  // Fetch Instagram posts
+  const { data: igPosts, isLoading: igPostsLoading } = useSWR(
+    authStatus.instagram && selectedInstagramAccount ? ['ig-media', selectedInstagramAccount.id] : null,
+    () => apiClient.getInstagramAccountMedia({ accountId: selectedInstagramAccount!.id, limit: 3 })
+  );
 
   const fetchAuthStatus = async () => {
     try {
@@ -44,24 +53,6 @@ export default function DashboardPage() {
       setAuthStatus(status)
     } catch (error) {
       console.error("Failed to fetch auth status:", error)
-    }
-  }
-
-  const fetchAnalytics = async () => {
-    try {
-      const analyticsData = await apiClient.getAnalyticsOverview()
-      setAnalytics(analyticsData)
-    } catch (error) {
-      console.error("Failed to fetch analytics:", error)
-    }
-  }
-
-  const fetchRecentPosts = async () => {
-    try {
-      const historyData = await apiClient.getPostHistory(1, 3)
-      setRecentPosts(historyData.posts)
-    } catch (error) {
-      console.error("Failed to fetch recent posts:", error)
     }
   }
 
@@ -94,7 +85,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
-      await Promise.all([fetchAuthStatus(), fetchAnalytics(), fetchRecentPosts()])
+      await fetchAuthStatus()
       setIsLoading(false)
     }
 
@@ -133,8 +124,6 @@ export default function DashboardPage() {
     }
     loadAccountData()
   }, [authStatus.facebook, authStatus.instagram])
-
-  const totalPosts = analytics ? Math.floor(analytics.totalReach / 500) : 24
 
   return (
     <div className="min-h-screen bg-background">
@@ -218,8 +207,8 @@ export default function DashboardPage() {
                   <History className="h-4 w-4 text-accent" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-primary">{isLoading ? "..." : totalPosts}</div>
-                  <p className="text-xs text-muted-foreground">Posts this month</p>
+                  <div className="text-2xl font-bold text-primary">View Posts</div>
+                  <p className="text-xs text-muted-foreground">See all your posts</p>
                 </CardContent>
               </Card>
             </Link>
@@ -242,34 +231,19 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </Link>
-
-            {isAnySocialConnected ? (
-              <Link href="/analytics">
-                <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Analytics</CardTitle>
-                    <TrendingUp className="h-4 w-4 text-accent" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-primary">
-                      {isLoading ? "..." : `+${analytics?.weeklyGrowth.engagement.toFixed(1)}%`}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Engagement this week</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ) : (
-              <Card className="border-border opacity-60 cursor-not-allowed">
+            
+            <Link href="/analytics">
+              <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Analytics</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <TrendingUp className="h-4 w-4 text-accent" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-muted-foreground">Connect</div>
-                  <p className="text-xs text-muted-foreground">Connect accounts to view analytics</p>
+                  <div className="text-2xl font-bold text-primary">View Stats</div>
+                  <p className="text-xs text-muted-foreground">Check post performance</p>
                 </CardContent>
               </Card>
-            )}
+            </Link>
           </div>
 
           <Card className="border-border">
@@ -278,47 +252,109 @@ export default function DashboardPage() {
               <CardDescription>Your latest social media posts and their performance</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-muted-foreground">Loading recent activity...</div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentPosts.map((post) => (
-                    <div
-                      key={post.id}
-                      className="flex items-center justify-between p-4 border border-border rounded-lg"
+                <div className="border-b border-border">
+                  <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button
+                      onClick={() => setActiveTab('facebook')}
+                      className={`${
+                        activeTab === 'facebook'
+                          ? 'border-primary text-primary'
+                          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className="h-10 w-10 rounded-full bg-card flex items-center justify-center">
-                          {post.platforms.includes("Instagram") && <Instagram className="h-5 w-5 text-accent" />}
-                          {post.platforms.includes("Facebook") && !post.platforms.includes("Instagram") && (
-                            <Facebook className="h-5 w-5 text-primary" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium">{post.content}</p>
-                          <p className="text-sm text-muted-foreground">{post.platforms.join(", ")}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant={post.status === "Posted" ? "default" : "secondary"}>{post.status}</Badge>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {post.engagement
-                            ? `${(post.engagement.instagram?.likes || 0) + (post.engagement.facebook?.likes || 0)} likes`
-                            : post.scheduledAt
-                              ? `Scheduled`
-                              : "No engagement yet"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                      Facebook
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('instagram')}
+                      className={`${
+                        activeTab === 'instagram'
+                          ? 'border-primary text-primary'
+                          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                    >
+                      Instagram
+                    </button>
+                  </nav>
                 </div>
-              )}
+                
+                <div className="pt-6">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-muted-foreground">Loading recent activity...</div>
+                    </div>
+                  ) : (
+                    <div>
+                      {activeTab === 'facebook' && (
+                        authStatus.facebook ? (
+                          fbPostsLoading ? (
+                            <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
+                          ) : (
+                            <div className="space-y-4">
+                              {(fbPosts?.data ?? []).map((post: FacebookPost) => (
+                                <div key={post.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                                <div className="flex items-center space-x-4">
+                                  {post.full_picture && <img src={post.full_picture} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
+                                  <div>
+                                    <p className="font-medium">{post.message || 'No caption'}</p>
+                                    <p className="text-sm text-muted-foreground">Facebook</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <Badge variant="default">Posted</Badge>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {new Date(post.created_time).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              ))}
+                               {fbPosts?.data?.length === 0 && <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>}
+                            </div>
+                          )
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Connect your Facebook account to see recent posts.
+                          </div>
+                        )
+                      )}
+                      {activeTab === 'instagram' && (
+                        authStatus.instagram ? (
+                          igPostsLoading ? (
+                            <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
+                          ) : (
+                            <div className="space-y-4">
+                              {(igPosts?.data ?? []).map((post: InstagramMedia) => (
+                                <div key={post.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                                  <div className="flex items-center space-x-4">
+                                    {(post.media_type === 'IMAGE' || post.media_type === 'CAROUSEL_ALBUM') && post.media_url && <img src={post.media_url} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
+                                    {post.media_type === 'VIDEO' && post.thumbnail_url && <img src={post.thumbnail_url} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
+                                    <div>
+                                      <p className="font-medium">{post.caption || 'No caption'}</p>
+                                      <p className="text-sm text-muted-foreground">Instagram</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <Badge variant="default">Posted</Badge>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {new Date(post.timestamp).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                              {igPosts?.data?.length === 0 && <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>}
+                            </div>
+                          )
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            Connect your Instagram account to see recent posts.
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
             </CardContent>
           </Card>
 
-          {/* Hidden dialogs for Facebook and Instagram account management */}
           <Dialog open={showFacebookPageModal} onOpenChange={setShowFacebookPageModal}>
             <DialogContent>
               <DialogHeader>

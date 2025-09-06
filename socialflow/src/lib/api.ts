@@ -644,7 +644,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
   }
 
-  async getFacebookPagePosts(params: {
+    async getFacebookPagePosts(params: {
     pageId: string
     after?: string
     before?: string
@@ -664,9 +664,11 @@ class ApiClient {
     return this.request(`/api/social/analytics/facebook/posts?${q.toString()}`)
   }
 
-  async getFacebookPostDetails(postId: string): Promise<FacebookPostDetails> {
-    return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}`)
+  async getFacebookPostDetails(postId: string, accessToken: string): Promise<FacebookPostDetails> {
+    const q = new URLSearchParams({ accessToken });
+    return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}?${q.toString()}`);
   }
+
 
   // Connection testing methods
   async testConnections(): Promise<TestResults> {

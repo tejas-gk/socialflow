@@ -1,3 +1,5 @@
+// src/components/analytics/facebook-analytics.tsx
+
 "use client"
 import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
@@ -16,7 +18,11 @@ function number(v: unknown) {
 }
 
 export default function FacebookAnalytics() {
-  const { data: pagesResp } = useSWR("fb-pages", () => apiClient.getFacebookPagesAnalytics())
+  const { data: pagesResp, isLoading: pagesLoading } = useSWR(
+    "fb-pages", 
+    () => apiClient.getFacebookPagesAnalytics(), 
+    { shouldRetryOnError: false }
+  );
   const pages: FbPage[] = pagesResp?.data ?? []
 
   const [pageId, setPageId] = useState<string>("")
@@ -24,17 +30,21 @@ export default function FacebookAnalytics() {
     if (!pageId && pages?.length) setPageId(pages[0].id)
   }, [pages, pageId])
 
-  const { data: insights, isLoading: insightsLoading } = useSWR(pageId ? ["fb-insights", pageId] : null, () =>
-    apiClient.getFacebookPageInsights(pageId),
-  )
+  const { data: insights, isLoading: insightsLoading } = useSWR(
+    pageId ? ["fb-insights", pageId] : null, 
+    () => apiClient.getFacebookPageInsights(pageId),
+    { shouldRetryOnError: false }
+  );
 
-  const { data: posts, isLoading: postsLoading } = useSWR(pageId ? ["fb-posts", pageId] : null, () =>
-    apiClient.getFacebookPagePosts({ pageId, limit: 10 }),
-  )
+  const { data: posts, isLoading: postsLoading } = useSWR(
+    pageId ? ["fb-posts", pageId] : null, 
+    () => apiClient.getFacebookPagePosts({ pageId, limit: 10 }),
+    { shouldRetryOnError: false }
+  );
 
   const timeseries = useMemo(() => {
     const values =
-      insights?.report?.pageLikes?.data?.[0]?.values ?? insights?.report?.pageReach?.data?.[0]?.values ?? []
+      insights?.report?.pageReach?.data?.[0]?.values ?? insights?.report?.pageLikes?.data?.[0]?.values ?? []
     type FbInsightValue = { end_time?: string; value?: number | string | null };
     return values.map((v: FbInsightValue) => ({
       date: v.end_time?.slice(0, 10),
@@ -43,9 +53,30 @@ export default function FacebookAnalytics() {
   }, [insights])
 
   const [openPost, setOpenPost] = useState<string | null>(null)
-  const { data: postDetails } = useSWR(openPost ? ["fb-post", openPost] : null, () =>
-    apiClient.getFacebookPostDetails(openPost!),
-  )
+  const selectedPage = useMemo(() => pages.find(p => p.id === pageId), [pages, pageId]);
+
+  const { data: postDetails, isLoading: postDetailsLoading } = useSWR(
+    openPost && selectedPage?.access_token ? ["fb-post", openPost, selectedPage.access_token] : null, 
+    ([, postId, token]) => apiClient.getFacebookPostDetails(postId, token),
+    { shouldRetryOnError: false }
+  );
+  
+  if (pagesLoading) {
+    return <div className="text-center text-muted-foreground py-10">Loading Facebook pages...</div>;
+  }
+  
+  if (!pages.length) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-8">
+          <p className="text-muted-foreground mb-4">
+            No Facebook Page connected. Please connect one from the dashboard.
+          </p>
+          <Button onClick={() => window.location.href = '/dashboard'}>Go to Dashboard</Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,10 +146,9 @@ export default function FacebookAnalytics() {
               }) => (
                 <div key={p.id} className="flex items-center justify-between border rounded-md p-3">
                   <div className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     {p.full_picture ? (
                       <img
-                        src={p.full_picture || "/placeholder.svg"}
+                        src={p.full_picture}
                         alt="post"
                         className="h-12 w-12 object-cover rounded"
                       />
@@ -145,14 +175,13 @@ export default function FacebookAnalytics() {
           <DialogHeader>
             <DialogTitle>Post details</DialogTitle>
           </DialogHeader>
-          {!postDetails ? (
-            <div className="text-sm text-muted-foreground">Loading…</div>
+          {postDetailsLoading || !postDetails ? (
+            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
           ) : (
             <div className="flex flex-col gap-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               {postDetails?.post_details?.full_picture && (
                 <img
-                  src={postDetails.post_details.full_picture || "/placeholder.svg"}
+                  src={postDetails.post_details.full_picture}
                   alt="post"
                   className="w-full max-h-72 object-cover rounded"
                 />
