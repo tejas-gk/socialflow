@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
-
 // Define the post type based on your Facebook API response
 interface FacebookPost {
   id: string;
@@ -34,12 +33,6 @@ export default function HistoryPage() {
     () => apiClient.getFacebookPagePosts({ pageId, limit: 10 })
   )
 
-  const [openPost, setOpenPost] = useState<string | null>(null)
-  const { data: postDetails } = useSWR(
-    openPost ? ['fb-post', openPost] : null,
-    () => apiClient.getFacebookPostDetails(openPost!)
-  )
-
   // Instagram posts state and data fetching
   const { data: igAccounts } = useSWR("ig-accounts", () => apiClient.getInstagramAccountsAnalytics());
   const [igAccountId, setIgAccountId] = useState("");
@@ -52,13 +45,6 @@ export default function HistoryPage() {
     igAccountId ? ['ig-media', igAccountId] : null,
     () => apiClient.getInstagramAccountMedia({ accountId: igAccountId, limit: 10 })
   );
-
-  const [openIgPost, setOpenIgPost] = useState<string | null>(null);
-  const { data: igPostDetails } = useSWR(
-    openIgPost ? ['ig-media-details', openIgPost] : null,
-    () => apiClient.getInstagramMediaDetails(openIgPost!)
-  );
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,13 +147,6 @@ export default function HistoryPage() {
                           {new Date(p.created_time).toLocaleString()}
                         </p>
                       </div>
-
-                      <Button
-                        size="sm"
-                        onClick={() => setOpenPost(p.id)}
-                      >
-                        View Details
-                      </Button>
                     </div>
                   ))}
 
@@ -235,14 +214,6 @@ export default function HistoryPage() {
                           {new Date(p.timestamp).toLocaleString()}
                         </p>
                       </div>
-
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setOpenIgPost(p.id)}
-                      >
-                        View Details
-                      </Button>
                     </div>
                   ))}
 
@@ -256,130 +227,6 @@ export default function HistoryPage() {
             </div>
           )}
         </div>
-
-
-        {/* Modal for Facebook post details */}
-        {openPost && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Post Details</h3>
-                  <button
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setOpenPost(null)}
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {!postDetails ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <span className="ml-2 text-muted-foreground">Loading post details...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {postDetails?.post_details?.full_picture && (
-                      <img
-                        src={postDetails.post_details.full_picture}
-                        alt="Post detail image"
-                        className="w-full rounded-lg shadow-sm"
-                      />
-                    )}
-
-                    <div className="prose dark:prose-invert max-w-none">
-                      <p className="text-foreground whitespace-pre-wrap">
-                        {postDetails?.post_details?.message || "No message content"}
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t border-border">
-                      <Button
-                        variant="outline"
-                        onClick={() => setOpenPost(null)}
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal for Instagram post details */}
-        {openIgPost && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Post Details</h3>
-                  <button
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setOpenIgPost(null)}
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {!igPostDetails ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-secondary"></div>
-                    <span className="ml-2 text-muted-foreground">Loading post details...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {igPostDetails?.media_details?.media_url && igPostDetails.media_details.media_type !== 'VIDEO' && (
-                      <img
-                        src={igPostDetails.media_details.media_url}
-                        alt="Post image"
-                        className="w-full rounded-lg shadow-sm"
-                      />
-                    )}
-                    {igPostDetails?.media_details?.media_type === 'VIDEO' && igPostDetails?.media_details.thumbnail_url && (
-                      <img
-                        src={igPostDetails.media_details.thumbnail_url}
-                        alt="Post image"
-                        className="w-full rounded-lg shadow-sm"
-                      />
-                    )}
-
-                    <div className="prose dark:prose-invert max-w-none">
-                      <p className="text-foreground whitespace-pre-wrap">
-                        {igPostDetails?.media_details?.caption || "No message content"}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-4 border-t border-border">
-                      <p>Likes: {igPostDetails?.media_stats?.likes ?? 'N/A'}</p>
-                      <p>Comments: {igPostDetails?.media_stats?.comments ?? 'N/A'}</p>
-                      <p>Impressions: {igPostDetails?.media_stats?.impressions ?? 'N/A'}</p>
-                      <p>Reach: {igPostDetails?.media_stats?.reach ?? 'N/A'}</p>
-                      <p>Saves: {igPostDetails?.media_stats?.saved ?? 'N/A'}</p>
-                      <p>Engagement: {igPostDetails?.media_stats?.engagement ?? 'N/A'}</p>
-                    </div>
-
-
-                    <div className="flex justify-end pt-4 border-t border-border">
-                      <Button
-                        variant="outline"
-                        onClick={() => setOpenIgPost(null)}
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

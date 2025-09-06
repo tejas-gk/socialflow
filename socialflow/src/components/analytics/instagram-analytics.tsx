@@ -1,8 +1,10 @@
+// src/components/analytics/instagram-analytics.tsx
+
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
-import { apiClient, type InstagramMedia, type InstagramMediaDetails } from "@/lib/api"
+import { apiClient, type InstagramMedia, type InstagramAccount } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -14,14 +16,6 @@ function number(v: unknown) {
   if (typeof v === "number") return v
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
-}
-
-interface InstagramAccount {
-  id: string;
-  name: string;
-  username: string;
-  followersCount: number;
-  mediaCount: number;
 }
 
 export default function InstagramAnalytics() {
@@ -64,13 +58,13 @@ export default function InstagramAnalytics() {
   );
 
   const [openPostId, setOpenPostId] = useState<string | null>(null);
+  const selectedAccount = useMemo(() => accounts?.find((acc: InstagramAccount) => acc.id === businessId), [accounts, businessId]);
+
   const { data: postDetails } = useSWR(
-    openPostId ? ["ig-media-details", openPostId] : null,
-    () => apiClient.getInstagramMediaDetails(openPostId!),
+    openPostId && selectedAccount?.accessToken ? ["ig-media-details", openPostId, selectedAccount.accessToken] : null,
+    ([, mediaId, token]) => apiClient.getInstagramMediaDetails(mediaId, token),
     { shouldRetryOnError: false }
   );
-
-  const selectedAccount = useMemo(() => accounts?.find(acc => acc.id === businessId), [accounts, businessId]);
 
   const followerTimeseries = useMemo(() => {
     const values = followers?.new?.data?.[0]?.values ?? [];
@@ -111,7 +105,7 @@ export default function InstagramAnalytics() {
               <SelectValue placeholder="Select Instagram account" />
             </SelectTrigger>
             <SelectContent>
-              {accounts.map((acc) => (
+              {accounts.map((acc: InstagramAccount) => (
                 <SelectItem key={acc.id} value={acc.id}>
                   @{acc.username} ({acc.name})
                 </SelectItem>

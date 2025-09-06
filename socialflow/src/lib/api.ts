@@ -11,6 +11,8 @@ export interface InstagramAccount {
   name?: string
   username?: string
   pageAccessToken?: string
+  accessToken?: string; // Added this line
+
 }
 
 export interface AuthStatus {
@@ -688,7 +690,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/instagram/account-insights?accountId=${encodeURIComponent(accountId)}`)
   }
 
-  async getInstagramAccountMedia(params: {
+ async getInstagramAccountMedia(params: {
     accountId: string
     after?: string
     limit?: number
@@ -700,8 +702,9 @@ class ApiClient {
     return this.request(`/api/social/analytics/instagram/media?${q.toString()}`)
   }
 
-  async getInstagramMediaDetails(mediaId: string): Promise<InstagramMediaDetails> {
-    return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}`)
+  async getInstagramMediaDetails(mediaId: string, accessToken: string): Promise<InstagramMediaDetails> {
+    const q = new URLSearchParams({ accessToken });
+    return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}?${q.toString()}`);
   }
 //   async getInstagramAccountsAnalytics(): Promise<{ data: InstagramAccountAnalytics[] }> {
 //   const accounts = await this.request("/api/social/analytics/instagram/accounts")
