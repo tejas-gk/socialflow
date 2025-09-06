@@ -25,7 +25,7 @@ export default function AnalyticsPage() {
   // Check for Instagram accounts
   const { data: instagramAccounts } = useSWR(
     'ig-accounts',
-    () => apiClient.getInstagramAccountsAnalytics().catch(() => ({ data: [] }))
+    () => apiClient.getInstagramAccounts().catch(() => [])
   )
 
   // Check for Facebook pages
@@ -34,7 +34,7 @@ export default function AnalyticsPage() {
     () => apiClient.getFacebookPagesAnalytics().catch(() => ({ data: [] }))
   )
 
-  const hasInstagramAccounts = instagramAccounts?.data?.length > 0
+  const hasInstagramAccounts = instagramAccounts?.length > 0
   const hasFacebookPages = facebookPages?.data?.length > 0
   const isInstagramConnected = connectionStatus?.instagram?.connected
   const isFacebookConnected = connectionStatus?.facebook?.connected
@@ -69,10 +69,11 @@ export default function AnalyticsPage() {
               </Badge>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4">
+              {/* --- START OF FIX --- */}
               <Button
                 size="sm"
                 className={`${isFacebookConnected ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
-                onClick={() => window.location.href = '/connections'}
+                onClick={() => window.location.href = apiClient.getFacebookAuthUrl()}
                 title={isFacebookConnected ? "Facebook Connected" : "Connect Facebook"}
               >
                 <Facebook className="h-4 w-4 mr-2" />
@@ -81,12 +82,13 @@ export default function AnalyticsPage() {
               <Button
                 size="sm"
                 className={`${isInstagramConnected ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"} text-white`}
-                onClick={() => window.location.href = '/connections'}
+                onClick={() => window.location.href = apiClient.getInstagramAuthUrl()}
                 title={isInstagramConnected ? "Instagram Connected" : "Connect Instagram"}
               >
                 <Instagram className="h-4 w-4 mr-2" />
                 Instagram
               </Button>
+              {/* --- END OF FIX --- */}
             </div>
           </div>
         </div>
@@ -124,7 +126,7 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">
-                  {isInstagramConnected ? (hasInstagramAccounts ? instagramAccounts.data.length : '0') : 'Not Connected'}
+                  {isInstagramConnected ? (hasInstagramAccounts ? instagramAccounts.length : '0') : 'Not Connected'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {isInstagramConnected ? 'Accounts available' : 'Connect to view accounts'}
@@ -205,7 +207,7 @@ export default function AnalyticsPage() {
                     <span>Instagram</span>
                     {hasInstagramAccounts && (
                       <Badge variant="secondary" className="ml-1 text-xs">
-                        {instagramAccounts.data.length}
+                        {instagramAccounts.length}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -248,12 +250,14 @@ export default function AnalyticsPage() {
                               View Analytics
                             </Button>
                           ) : (
+                            // --- START OF FIX ---
                             <Button 
                               size="sm"
-                              onClick={() => window.location.href = '/connections'}
+                              onClick={() => window.location.href = apiClient.getFacebookAuthUrl()}
                             >
                               {!isFacebookConnected ? 'Connect Facebook' : 'Add Pages'}
                             </Button>
+                            // --- END OF FIX ---
                           )}
                         </div>
                       </CardContent>
@@ -280,7 +284,7 @@ export default function AnalyticsPage() {
                           </p>
                           {isInstagramConnected && (
                             <p className="text-sm text-muted-foreground">
-                              Accounts: {hasInstagramAccounts ? instagramAccounts.data.length : 0}
+                              Accounts: {hasInstagramAccounts ? instagramAccounts.length : 0}
                             </p>
                           )}
                         </div>
@@ -294,12 +298,14 @@ export default function AnalyticsPage() {
                               View Analytics
                             </Button>
                           ) : (
+                            // --- START OF FIX ---
                             <Button 
                               size="sm"
-                              onClick={() => window.location.href = '/connections'}
+                              onClick={() => window.location.href = apiClient.getInstagramAuthUrl()}
                             >
                               {!isInstagramConnected ? 'Connect Instagram' : 'Add Accounts'}
                             </Button>
+                            // --- END OF FIX ---
                           )}
                         </div>
                       </CardContent>
@@ -335,11 +341,11 @@ export default function AnalyticsPage() {
                         <div>
                           <h3 className="text-lg font-semibold">Instagram Analytics</h3>
                           <p className="text-sm text-muted-foreground">
-                            Analytics for {instagramAccounts.data.length} Instagram {instagramAccounts.data.length === 1 ? 'account' : 'accounts'}
+                            Analytics for {instagramAccounts.length} Instagram {instagramAccounts.length === 1 ? 'account' : 'accounts'}
                           </p>
                         </div>
                         <Badge variant="secondary">
-                          {instagramAccounts.data.length} {instagramAccounts.data.length === 1 ? 'account' : 'accounts'}
+                          {instagramAccounts.length} {instagramAccounts.length === 1 ? 'account' : 'accounts'}
                         </Badge>
                       </div>
                       <InstagramAnalytics />
@@ -371,9 +377,11 @@ function EmptyState({ platform }: { platform: string }) {
       <p className="text-muted-foreground text-center mb-4">
         Connect your {platform} account and add {platform === 'Facebook' ? 'pages' : 'business accounts'} to view analytics.
       </p>
-      <Button onClick={() => window.location.href = '/connections'}>
+      {/* --- START OF FIX --- */}
+      <Button onClick={() => window.location.href = platform === 'Facebook' ? apiClient.getFacebookAuthUrl() : apiClient.getInstagramAuthUrl()}>
         Manage Connections
       </Button>
+      {/* --- END OF FIX --- */}
     </div>
   )
 }
