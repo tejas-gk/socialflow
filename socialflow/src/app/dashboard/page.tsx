@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useUser, SignOutButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog"
 
 export default function DashboardPage() {
+  const { user, isLoaded } = useUser()
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ facebook: false, instagram: false })
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
   const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
@@ -125,6 +127,40 @@ export default function DashboardPage() {
     loadAccountData()
   }, [authStatus.facebook, authStatus.instagram])
 
+  // Show loading state while user data is loading
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  // Get user's first name or fallback to full name or email
+  const getUserDisplayName = () => {
+    if (user?.firstName) return user.firstName
+    if (user?.fullName) return user.fullName
+    if (user?.primaryEmailAddress?.emailAddress) {
+      return user.primaryEmailAddress.emailAddress.split('@')[0]
+    }
+    return "User"
+  }
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+    }
+    if (user?.fullName) {
+      const names = user.fullName.split(' ')
+      if (names.length >= 2) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
+      }
+      return names[0][0].toUpperCase()
+    }
+    return "U"
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
@@ -167,12 +203,14 @@ export default function DashboardPage() {
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Button>
-              <Button variant="ghost" size="sm">
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
+              <SignOutButton>
+                <Button variant="ghost" size="sm">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </SignOutButton>
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
-                JD
+                {getUserInitials()}
               </div>
             </div>
           </div>
@@ -182,7 +220,7 @@ export default function DashboardPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold font-serif">Welcome back, John!</h2>
+            <h2 className="text-3xl font-bold font-serif">Welcome back, {getUserDisplayName()}!</h2>
             <p className="text-muted-foreground">Manage your Instagram and Facebook presence from one place.</p>
           </div>
 
