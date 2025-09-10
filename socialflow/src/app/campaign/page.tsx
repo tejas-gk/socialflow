@@ -2,6 +2,9 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
+// --- START OF FIX ---
+import { useUser } from "@clerk/nextjs"
+// --- END OF FIX ---
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -37,6 +40,9 @@ import { apiClient, type PostRequest, type FacebookPage, type InstagramAccount, 
 import { uploadMedia } from "@/lib/api"
 
 export default function CampaignPage() {
+  // --- START OF FIX ---
+  const { user } = useUser()
+  // --- END OF FIX ---
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
   const [postContent, setPostContent] = useState("")
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
@@ -125,8 +131,16 @@ export default function CampaignPage() {
   }
 
   const handleSelectFacebookPage = async (pageId: string) => {
+    // --- START OF FIX ---
+    if (!user) {
+      setPostResult({ error: "User not found. Please refresh the page and try again." })
+      return
+    }
+    // --- END OF FIX ---
     try {
-      const result = await apiClient.selectFacebookPage(pageId)
+      // --- START OF FIX ---
+      const result = await apiClient.selectFacebookPage(pageId, user.id)
+      // --- END OF FIX ---
       if (result.success) {
         setSelectedFacebookPage(result.page)
         setShowFacebookPageModal(false)

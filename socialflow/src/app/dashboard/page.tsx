@@ -1,14 +1,13 @@
-// src/app/dashboard/page.tsx
-
 "use client"
 
 import { useEffect, useState } from "react"
-import { useUser, SignOutButton } from "@clerk/nextjs"
+import { useUser, SignOutButton, UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi, LogOut } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"// Import the Next.js Image component
 import useSWR from "swr"
 import {
   apiClient,
@@ -31,6 +30,7 @@ export default function DashboardPage() {
   const [showInstagramAccountModal, setShowInstagramAccountModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("facebook")
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
   useEffect(() => {
     if (user?.id && typeof window !== "undefined") {
@@ -61,13 +61,11 @@ export default function DashboardPage() {
 
   const handleSelectFacebookPage = async (pageId: string) => {
     try {
-      // --- START OF FIX ---
       if (!user) {
         console.error("User is not available for page selection.")
         return
       }
       const result = await apiClient.selectFacebookPage(pageId, user.id)
-      // --- END OF FIX ---
       if (result.success) {
         setSelectedFacebookPage(result.page)
         setShowFacebookPageModal(false)
@@ -90,6 +88,19 @@ export default function DashboardPage() {
       console.error("Failed to select Instagram account:", e)
     }
   }
+
+  const handleDisconnect = async (platform: 'facebook' | 'instagram') => {
+    try {
+      const result = await apiClient.disconnectPlatform(platform);
+      if (result.success) {
+        await fetchAuthStatus(); // Refresh the UI to show the disconnected state
+      } else {
+        console.error(`Failed to disconnect ${platform}`);
+      }
+    } catch (error) {
+      console.error(`Error disconnecting ${platform}:`, error);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -134,7 +145,6 @@ export default function DashboardPage() {
     loadAccountData()
   }, [authStatus.facebook, authStatus.instagram])
 
-  // Show loading state while user data is loading
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -143,7 +153,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Get user's first name or fallback to full name or email
   const getUserDisplayName = () => {
     if (user?.firstName) return user.firstName
     if (user?.fullName) return user.fullName
@@ -151,21 +160,6 @@ export default function DashboardPage() {
       return user.primaryEmailAddress.emailAddress.split("@")[0]
     }
     return "User"
-  }
-
-  // Get user initials for avatar
-  const getUserInitials = () => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-    }
-    if (user?.fullName) {
-      const names = user.fullName.split(" ")
-      if (names.length >= 2) {
-        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
-      }
-      return names[0][0].toUpperCase()
-    }
-    return "U"
   }
 
   return (
@@ -206,19 +200,11 @@ export default function DashboardPage() {
                 <Instagram className="h-4 w-4 mr-2" />
                 Instagram
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => setIsSettingsModalOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </Button>
-              <SignOutButton>
-                <Button variant="ghost" size="sm">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
-              </SignOutButton>
-              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
-                {getUserInitials()}
-              </div>
+              <UserButton afterSignOutUrl="/" />
             </div>
           </div>
         </div>
@@ -227,12 +213,12 @@ export default function DashboardPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold font-serif">Welcome back, {getUserDisplayName()}!</h2>
+            <h2 className="text-3xl font-bold font-serif">Welcome back, {user?.username || getUserDisplayName()}!</h2>
             <p className="text-muted-foreground">Manage your Instagram and Facebook presence from one place.</p>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Link href="/campaign">
+            <Link href="/campaign" passHref>
               <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Start Campaign</CardTitle>
@@ -245,7 +231,7 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link href="/history">
+            <Link href="/history" passHref>
               <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">View History</CardTitle>
@@ -258,7 +244,7 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link href="/test-connection">
+            <Link href="/test-connection" passHref>
               <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Test Connection</CardTitle>
@@ -277,7 +263,7 @@ export default function DashboardPage() {
               </Card>
             </Link>
 
-            <Link href="/analytics">
+            <Link href="/analytics" passHref>
               <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Analytics</CardTitle>
@@ -342,9 +328,11 @@ export default function DashboardPage() {
                               >
                                 <div className="flex items-center space-x-4">
                                   {post.full_picture && (
-                                    <img
-                                      src={post.full_picture || "/placeholder.svg"}
-                                      alt="Post"
+                                    <Image
+                                      src={post.full_picture}
+                                      alt="Post thumbnail"
+                                      width={40}
+                                      height={40}
                                       className="h-10 w-10 rounded-full object-cover"
                                     />
                                   )}
@@ -385,16 +373,20 @@ export default function DashboardPage() {
                                 <div className="flex items-center space-x-4">
                                   {(post.media_type === "IMAGE" || post.media_type === "CAROUSEL_ALBUM") &&
                                     post.media_url && (
-                                      <img
-                                        src={post.media_url || "/placeholder.svg"}
-                                        alt="Post"
+                                      <Image
+                                        src={post.media_url}
+                                        alt="Post thumbnail"
+                                        width={40}
+                                        height={40}
                                         className="h-10 w-10 rounded-full object-cover"
                                       />
                                     )}
                                   {post.media_type === "VIDEO" && post.thumbnail_url && (
-                                    <img
-                                      src={post.thumbnail_url || "/placeholder.svg"}
-                                      alt="Post"
+                                    <Image
+                                      src={post.thumbnail_url}
+                                      alt="Post thumbnail"
+                                      width={40}
+                                      height={40}
                                       className="h-10 w-10 rounded-full object-cover"
                                     />
                                   )}
@@ -471,6 +463,65 @@ export default function DashboardPage() {
                     )}
                   </Button>
                 ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Manage Connections</DialogTitle>
+                <DialogDescription>
+                  Disconnect your social media accounts here. You can reconnect them at any time.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Facebook className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <p className="font-medium">Facebook</p>
+                      <p className="text-sm text-muted-foreground">
+                        {authStatus.facebook ? `Connected as ${selectedFacebookPage?.name || 'Page'}` : 'Not Connected'}
+                      </p>
+                    </div>
+                  </div>
+                  {authStatus.facebook ? (
+                    <Button variant="destructive" size="sm" onClick={() => handleDisconnect('facebook')}>
+                      Disconnect
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => {
+                      window.open(apiClient.getFacebookAuthUrl(), "_blank");
+                      setIsSettingsModalOpen(false);
+                    }}>
+                      Connect
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Instagram className="h-5 w-5 text-pink-600" />
+                    <div>
+                      <p className="font-medium">Instagram</p>
+                      <p className="text-sm text-muted-foreground">
+                         {authStatus.instagram ? `Connected as @${selectedInstagramAccount?.username || 'Account'}` : 'Not Connected'}
+                      </p>
+                    </div>
+                  </div>
+                  {authStatus.instagram ? (
+                    <Button variant="destructive" size="sm" onClick={() => handleDisconnect('instagram')}>
+                      Disconnect
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => {
+                      window.open(apiClient.getInstagramAuthUrl(), "_blank");
+                      setIsSettingsModalOpen(false);
+                    }}>
+                      Connect
+                    </Button>
+                  )}
+                </div>
               </div>
             </DialogContent>
           </Dialog>

@@ -1,12 +1,15 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import useSWR from 'swr'
-import { apiClient, type FbPage, type InstagramAccountAnalytics, type InstagramMedia } from '@/lib/api'
+import Image from 'next/image' // Import the Next.js Image component
+import { apiClient, type FbPage, type InstagramAccount, type InstagramMedia, type FacebookPostDetails, type InstagramMediaDetails } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, LineChart, MessageSquare, Heart, Share2, Eye, Bookmark } from 'lucide-react'
 import Link from 'next/link'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card, CardContent, CardHeader, CardTitle as CardTitleComponent } from "@/components/ui/card"
 
 // Define the post type based on your Facebook API response
 interface FacebookPost {
@@ -16,10 +19,26 @@ interface FacebookPost {
   created_time: string;
 }
 
-export default function HistoryPage() {
-    const [activeTab, setActiveTab] = useState('facebook');
+// A small component for displaying metrics in the dialog
+function MetricCard({ title, value, icon }: { title: string; value: number | string; icon: React.ReactNode }) {
+  return (
+    <Card className="bg-muted/50">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitleComponent className="text-sm font-medium">{title}</CardTitleComponent>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  )
+}
 
-  // Facebook posts state and data fetching
+export default function HistoryPage() {
+  const [activeTab, setActiveTab] = useState('facebook');
+  const [viewingPost, setViewingPost] = useState<{ id: string; platform: 'facebook' | 'instagram' } | null>(null);
+
+  // Facebook data fetching
   const { data: pagesResp } = useSWR("fb-pages", () => apiClient.getFacebookPagesAnalytics())
   const pages: FbPage[] = pagesResp?.data ?? []
   const [pageId, setPageId] = useState("")
@@ -33,7 +52,7 @@ export default function HistoryPage() {
     () => apiClient.getFacebookPagePosts({ pageId, limit: 10 })
   )
 
-  // Instagram posts state and data fetching
+  // Instagram data fetching
   const { data: igAccounts } = useSWR("ig-accounts", () => apiClient.getInstagramAccountsAnalytics());
   const [igAccountId, setIgAccountId] = useState("");
 
@@ -45,10 +64,26 @@ export default function HistoryPage() {
     igAccountId ? ['ig-media', igAccountId] : null,
     () => apiClient.getInstagramAccountMedia({ accountId: igAccountId, limit: 10 })
   );
+  
+  const selectedFbPage = useMemo(() => pages.find(p => p.id === pageId), [pages, pageId]);
+  const selectedIgAccount = useMemo(() => igAccounts?.find(acc => acc.id === igAccountId), [igAccounts, igAccountId]);
+
+  const { data: fbPostDetails, isLoading: fbDetailsLoading } = useSWR(
+    viewingPost?.platform === 'facebook' && selectedFbPage?.access_token
+      ? ['fb-post-details', viewingPost.id, selectedFbPage.access_token]
+      : null,
+    ([, postId, token]) => apiClient.getFacebookPostDetails(postId, token)
+  );
+
+  const { data: igPostDetails, isLoading: igDetailsLoading } = useSWR(
+    viewingPost?.platform === 'instagram' && selectedIgAccount?.accessToken
+      ? ['ig-post-details', viewingPost.id, selectedIgAccount.accessToken]
+      : null,
+    ([, mediaId, token]) => apiClient.getInstagramMediaDetails(mediaId, token)
+  );
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation Header - Matching Dashboard/Analytics Style */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -126,11 +161,13 @@ export default function HistoryPage() {
               ) : (
                 <div className="space-y-4">
                   {(posts?.data ?? []).map((p: FacebookPost) => (
-                    <div key={p.id} className="border border-border rounded-lg p-4 flex items-start space-x-4 hover:bg-muted/50 transition-colors">
+                    <div key={p.id} className="border border-border rounded-lg p-4 flex items-center space-x-4 hover:bg-muted/50 transition-colors">
                       {p.full_picture ? (
-                        <img
+                        <Image
                           src={p.full_picture}
                           alt="Post image"
+                          width={64}
+                          height={64}
                           className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                         />
                       ) : (
@@ -147,6 +184,9 @@ export default function HistoryPage() {
                           {new Date(p.created_time).toLocaleString()}
                         </p>
                       </div>
+                      <Button size="sm" variant="outline" onClick={() => setViewingPost({ id: p.id, platform: 'facebook' })}>
+                        View Details
+                      </Button>
                     </div>
                   ))}
 
@@ -171,7 +211,7 @@ export default function HistoryPage() {
                     className="px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Select an Instagram account</option>
-                    {igAccounts.map((account) => (
+                    {igAccounts.map((account: InstagramAccount) => (
                       <option key={account.id} value={account.id}>
                         @{account.username}
                       </option>
@@ -191,15 +231,17 @@ export default function HistoryPage() {
               ) : (
                 <div className="space-y-4">
                   {(igPosts?.data ?? []).map((p: InstagramMedia) => (
-                    <div key={p.id} className="border border-border rounded-lg p-4 flex items-start space-x-4 hover:bg-muted/50 transition-colors">
+                    <div key={p.id} className="border border-border rounded-lg p-4 flex items-center space-x-4 hover:bg-muted/50 transition-colors">
                       {p.media_url && p.media_type !== 'VIDEO' ? (
-                        <img
+                        <Image
                           src={p.media_url}
                           alt="Post image"
+                          width={64}
+                          height={64}
                           className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                         />
                       ) : p.thumbnail_url ? (
-                          <img src={p.thumbnail_url} alt="video thumbnail" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+                          <Image src={p.thumbnail_url} alt="video thumbnail" width={64} height={64} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
                       ) : (
                         <div className="w-16 h-16 bg-muted flex items-center justify-center rounded-lg flex-shrink-0">
                           <span className="text-muted-foreground text-xs">No Image</span>
@@ -214,6 +256,9 @@ export default function HistoryPage() {
                           {new Date(p.timestamp).toLocaleString()}
                         </p>
                       </div>
+                      <Button size="sm" variant="outline" onClick={() => setViewingPost({ id: p.id, platform: 'instagram' })}>
+                        View Details
+                      </Button>
                     </div>
                   ))}
 
@@ -228,6 +273,59 @@ export default function HistoryPage() {
           )}
         </div>
       </div>
+      
+      <Dialog open={!!viewingPost} onOpenChange={(isOpen) => !isOpen && setViewingPost(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Post Performance Details</DialogTitle>
+          </DialogHeader>
+          {(fbDetailsLoading || igDetailsLoading) ? (
+            <div className="text-center py-10 text-muted-foreground">Loading details...</div>
+          ) : (
+            <div className="space-y-4">
+              {viewingPost?.platform === 'facebook' && fbPostDetails && (
+                <div className="space-y-4">
+                   {fbPostDetails.post_details.full_picture && (
+                    <div className="relative w-full aspect-video">
+                      <Image src={fbPostDetails.post_details.full_picture} alt="Post" layout="fill" objectFit="contain" className="rounded-lg" />
+                    </div>
+                   )}
+                   <p className="text-sm text-muted-foreground italic">&quot;{fbPostDetails.post_details.message || 'No caption'}&quot;</p>
+                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <MetricCard title="Reactions" value={fbPostDetails.post_stats.total_reactions ?? 0} icon={<Heart className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Comments" value={fbPostDetails.post_stats.total_comments ?? 0} icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Shares" value={fbPostDetails.post_stats.total_shares ?? 0} icon={<Share2 className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Impressions" value={fbPostDetails.post_stats.post_impressions ?? 0} icon={<Eye className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Engagements" value={fbPostDetails.post_stats.total_engagements ?? 0} icon={<LineChart className="h-4 w-4 text-muted-foreground" />} />
+                   </div>
+                </div>
+              )}
+              {viewingPost?.platform === 'instagram' && igPostDetails && (
+                <div className="space-y-4">
+                  {(igPostDetails.media_details.media_url && igPostDetails.media_details.media_type !== 'VIDEO') && (
+                    <div className="relative w-full aspect-video">
+                      <Image src={igPostDetails.media_details.media_url} alt="Post" layout="fill" objectFit="contain" className="rounded-lg" />
+                    </div>
+                  )}
+                  {igPostDetails.media_details.thumbnail_url && (
+                    <div className="relative w-full aspect-video">
+                      <Image src={igPostDetails.media_details.thumbnail_url} alt="Post" layout="fill" objectFit="contain" className="rounded-lg" />
+                    </div>
+                  )}
+                  <p className="text-sm text-muted-foreground italic">&quot;{igPostDetails.media_details.caption || 'No caption'}&quot;</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <MetricCard title="Likes" value={igPostDetails.media_stats.likes ?? 0} icon={<Heart className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Comments" value={igPostDetails.media_stats.comments ?? 0} icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Saves" value={igPostDetails.media_stats.saves ?? 0} icon={<Bookmark className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Reach" value={igPostDetails.media_stats.reach ?? 0} icon={<Eye className="h-4 w-4 text-muted-foreground" />} />
+                      <MetricCard title="Engagement" value={igPostDetails.media_stats.engagement ?? 0} icon={<LineChart className="h-4 w-4 text-muted-foreground" />} />
+                   </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
