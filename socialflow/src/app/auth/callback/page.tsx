@@ -1,3 +1,5 @@
+// src/app/auth/callback/page.tsx
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -83,9 +85,20 @@ export default function AuthCallbackPage() {
 
   const handlePageSelection = async (pageId: string) => {
     setIsSelectingPage(true)
+    // --- START OF FIX ---
+    const userId = searchParams.get("userId")
+    if (!userId) {
+      setStatus("error")
+      setMessage("Authentication failed: User ID not found. Please try again.")
+      setIsSelectingPage(false)
+      return
+    }
+    // --- END OF FIX ---
     try {
       console.log("[v0] Selecting Facebook page:", pageId)
-      const response = await api.selectFacebookPage(pageId)
+      // --- START OF FIX ---
+      const response = await api.selectFacebookPage(pageId, userId)
+      // --- END OF FIX ---
       console.log("[v0] Page selection response:", response)
 
       if (response.success) {

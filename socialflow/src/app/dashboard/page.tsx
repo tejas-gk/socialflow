@@ -1,3 +1,5 @@
+// src/app/dashboard/page.tsx
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -7,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi, LogOut } from "lucide-react"
 import Link from "next/link"
-import useSWR from 'swr'
+import useSWR from "swr"
 import {
   apiClient,
   type AuthStatus,
@@ -15,15 +17,8 @@ import {
   type InstagramAccount,
   type InstagramMedia,
   type FacebookPost,
-  type AnalyticsOverview,
 } from "../../lib/api"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function DashboardPage() {
   const { user, isLoaded } = useUser()
@@ -35,19 +30,25 @@ export default function DashboardPage() {
   const [showFacebookPageModal, setShowFacebookPageModal] = useState(false)
   const [showInstagramAccountModal, setShowInstagramAccountModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('facebook');
+  const [activeTab, setActiveTab] = useState("facebook")
+
+  useEffect(() => {
+    if (user?.id && typeof window !== "undefined") {
+      window.__clerk_user_id = user.id
+    }
+  }, [user?.id])
 
   // Fetch Facebook posts
   const { data: fbPosts, isLoading: fbPostsLoading } = useSWR(
-    authStatus.facebook && selectedFacebookPage ? ['fb-posts', selectedFacebookPage.id] : null,
-    () => apiClient.getFacebookPagePosts({ pageId: selectedFacebookPage!.id, limit: 3 })
-  );
+    authStatus.facebook && selectedFacebookPage ? ["fb-posts", selectedFacebookPage.id] : null,
+    () => apiClient.getFacebookPagePosts({ pageId: selectedFacebookPage!.id, limit: 3 }),
+  )
 
   // Fetch Instagram posts
   const { data: igPosts, isLoading: igPostsLoading } = useSWR(
-    authStatus.instagram && selectedInstagramAccount ? ['ig-media', selectedInstagramAccount.id] : null,
-    () => apiClient.getInstagramAccountMedia({ accountId: selectedInstagramAccount!.id, limit: 3 })
-  );
+    authStatus.instagram && selectedInstagramAccount ? ["ig-media", selectedInstagramAccount.id] : null,
+    () => apiClient.getInstagramAccountMedia({ accountId: selectedInstagramAccount!.id, limit: 3 }),
+  )
 
   const fetchAuthStatus = async () => {
     try {
@@ -60,7 +61,13 @@ export default function DashboardPage() {
 
   const handleSelectFacebookPage = async (pageId: string) => {
     try {
-      const result = await apiClient.selectFacebookPage(pageId)
+      // --- START OF FIX ---
+      if (!user) {
+        console.error("User is not available for page selection.")
+        return
+      }
+      const result = await apiClient.selectFacebookPage(pageId, user.id)
+      // --- END OF FIX ---
       if (result.success) {
         setSelectedFacebookPage(result.page)
         setShowFacebookPageModal(false)
@@ -141,7 +148,7 @@ export default function DashboardPage() {
     if (user?.firstName) return user.firstName
     if (user?.fullName) return user.fullName
     if (user?.primaryEmailAddress?.emailAddress) {
-      return user.primaryEmailAddress.emailAddress.split('@')[0]
+      return user.primaryEmailAddress.emailAddress.split("@")[0]
     }
     return "User"
   }
@@ -152,7 +159,7 @@ export default function DashboardPage() {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
     }
     if (user?.fullName) {
-      const names = user.fullName.split(' ')
+      const names = user.fullName.split(" ")
       if (names.length >= 2) {
         return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
       }
@@ -269,7 +276,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </Link>
-            
+
             <Link href="/analytics">
               <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -290,50 +297,59 @@ export default function DashboardPage() {
               <CardDescription>Your latest social media posts and their performance</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="border-b border-border">
-                  <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    <button
-                      onClick={() => setActiveTab('facebook')}
-                      className={`${
-                        activeTab === 'facebook'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                    >
-                      Facebook
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('instagram')}
-                      className={`${
-                        activeTab === 'instagram'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                    >
-                      Instagram
-                    </button>
-                  </nav>
-                </div>
-                
-                <div className="pt-6">
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="text-muted-foreground">Loading recent activity...</div>
-                    </div>
-                  ) : (
-                    <div>
-                      {activeTab === 'facebook' && (
-                        authStatus.facebook ? (
-                          fbPostsLoading ? (
-                            <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
-                          ) : (
-                            <div className="space-y-4">
-                              {(fbPosts?.data ?? []).map((post: FacebookPost) => (
-                                <div key={post.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+              <div className="border-b border-border">
+                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                  <button
+                    onClick={() => setActiveTab("facebook")}
+                    className={`${
+                      activeTab === "facebook"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                  >
+                    Facebook
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("instagram")}
+                    className={`${
+                      activeTab === "instagram"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                  >
+                    Instagram
+                  </button>
+                </nav>
+              </div>
+
+              <div className="pt-6">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-muted-foreground">Loading recent activity...</div>
+                  </div>
+                ) : (
+                  <div>
+                    {activeTab === "facebook" &&
+                      (authStatus.facebook ? (
+                        fbPostsLoading ? (
+                          <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
+                        ) : (
+                          <div className="space-y-4">
+                            {(fbPosts?.data ?? []).map((post: FacebookPost) => (
+                              <div
+                                key={post.id}
+                                className="flex items-center justify-between p-4 border border-border rounded-lg"
+                              >
                                 <div className="flex items-center space-x-4">
-                                  {post.full_picture && <img src={post.full_picture} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
+                                  {post.full_picture && (
+                                    <img
+                                      src={post.full_picture || "/placeholder.svg"}
+                                      alt="Post"
+                                      className="h-10 w-10 rounded-full object-cover"
+                                    />
+                                  )}
                                   <div>
-                                    <p className="font-medium">{post.message || 'No caption'}</p>
+                                    <p className="font-medium">{post.message || "No caption"}</p>
                                     <p className="text-sm text-muted-foreground">Facebook</p>
                                   </div>
                                 </div>
@@ -344,52 +360,70 @@ export default function DashboardPage() {
                                   </p>
                                 </div>
                               </div>
-                              ))}
-                               {fbPosts?.data?.length === 0 && <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>}
-                            </div>
-                          )
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground">
-                            Connect your Facebook account to see recent posts.
+                            ))}
+                            {fbPosts?.data?.length === 0 && (
+                              <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>
+                            )}
                           </div>
                         )
-                      )}
-                      {activeTab === 'instagram' && (
-                        authStatus.instagram ? (
-                          igPostsLoading ? (
-                            <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
-                          ) : (
-                            <div className="space-y-4">
-                              {(igPosts?.data ?? []).map((post: InstagramMedia) => (
-                                <div key={post.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                                  <div className="flex items-center space-x-4">
-                                    {(post.media_type === 'IMAGE' || post.media_type === 'CAROUSEL_ALBUM') && post.media_url && <img src={post.media_url} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
-                                    {post.media_type === 'VIDEO' && post.thumbnail_url && <img src={post.thumbnail_url} alt="Post" className="h-10 w-10 rounded-full object-cover" />}
-                                    <div>
-                                      <p className="font-medium">{post.caption || 'No caption'}</p>
-                                      <p className="text-sm text-muted-foreground">Instagram</p>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <Badge variant="default">Posted</Badge>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {new Date(post.timestamp).toLocaleDateString()}
-                                    </p>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Connect your Facebook account to see recent posts.
+                        </div>
+                      ))}
+                    {activeTab === "instagram" &&
+                      (authStatus.instagram ? (
+                        igPostsLoading ? (
+                          <div className="text-center py-8 text-muted-foreground">Loading recent posts...</div>
+                        ) : (
+                          <div className="space-y-4">
+                            {(igPosts?.data ?? []).map((post: InstagramMedia) => (
+                              <div
+                                key={post.id}
+                                className="flex items-center justify-between p-4 border border-border rounded-lg"
+                              >
+                                <div className="flex items-center space-x-4">
+                                  {(post.media_type === "IMAGE" || post.media_type === "CAROUSEL_ALBUM") &&
+                                    post.media_url && (
+                                      <img
+                                        src={post.media_url || "/placeholder.svg"}
+                                        alt="Post"
+                                        className="h-10 w-10 rounded-full object-cover"
+                                      />
+                                    )}
+                                  {post.media_type === "VIDEO" && post.thumbnail_url && (
+                                    <img
+                                      src={post.thumbnail_url || "/placeholder.svg"}
+                                      alt="Post"
+                                      className="h-10 w-10 rounded-full object-cover"
+                                    />
+                                  )}
+                                  <div>
+                                    <p className="font-medium">{post.caption || "No caption"}</p>
+                                    <p className="text-sm text-muted-foreground">Instagram</p>
                                   </div>
                                 </div>
-                              ))}
-                              {igPosts?.data?.length === 0 && <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>}
-                            </div>
-                          )
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground">
-                            Connect your Instagram account to see recent posts.
+                                <div className="text-right">
+                                  <Badge variant="default">Posted</Badge>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {new Date(post.timestamp).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                            {igPosts?.data?.length === 0 && (
+                              <p className="text-center py-8 text-muted-foreground">No recent posts found.</p>
+                            )}
                           </div>
                         )
-                      )}
-                    </div>
-                  )}
-                </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Connect your Instagram account to see recent posts.
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -409,9 +443,7 @@ export default function DashboardPage() {
                   >
                     <Facebook className="h-4 w-4 mr-2 text-blue-600" />
                     {page.name}
-                    {selectedFacebookPage?.id === page.id && (
-                      <span className="h-4 w-4 ml-auto text-green-600">✓</span>
-                    )}
+                    {selectedFacebookPage?.id === page.id && <span className="h-4 w-4 ml-auto text-green-600">✓</span>}
                   </Button>
                 ))}
               </div>

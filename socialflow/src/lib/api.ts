@@ -1,3 +1,5 @@
+// src/lib/api.ts
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
 export interface FacebookPage {
@@ -11,9 +13,9 @@ export interface InstagramAccount {
   name?: string
   username?: string
   pageAccessToken?: string
-  accessToken?: string; // Added this line
-followersCount:string;
-mediaCount:string;
+  accessToken?: string
+  followersCount: string
+  mediaCount: string
 }
 
 export interface AuthStatus {
@@ -76,150 +78,150 @@ export interface AnalyticsOverview {
 }
 export interface InstagramDashboardReport {
   getTotalFollowers: {
-    followers_count: number;
-    id: string;
-  };
+    followers_count: number
+    id: string
+  }
   getNewFollowers: {
     data: {
-      name: "follower_count";
-      period: "day";
+      name: "follower_count"
+      period: "day"
       values: {
-        value: number;
-        end_time: string;
-      }[];
-      title: "Follower Count";
-      description: string;
-      id: string;
-    }[];
+        value: number
+        end_time: string
+      }[]
+      title: "Follower Count"
+      description: string
+      id: string
+    }[]
     paging: {
-      previous: string;
-      next: string;
-    };
-  };
+      previous: string
+      next: string
+    }
+  }
   getTotalPosts: {
-    media_count: number;
-    id: string;
-  };
+    media_count: number
+    id: string
+  }
   getTotalEngagement: {
     data: [
       {
-        name: "total_interactions";
-        period: "day";
-        title: "Content interactions";
-        description: string;
+        name: "total_interactions"
+        period: "day"
+        title: "Content interactions"
+        description: string
         total_value: {
-          value: number;
-        };
-        id: string;
-      }
-    ];
+          value: number
+        }
+        id: string
+      },
+    ]
     paging: {
-      previous: string;
-      next: string;
-    };
-  };
+      previous: string
+      next: string
+    }
+  }
   getProfileViews: {
     data: {
-      name: "profile_views";
-      period: "day";
+      name: "profile_views"
+      period: "day"
       values: {
-        value: number;
-        end_time: string;
-      }[];
-      title: "Profile Views";
-      description: string;
-      id: string;
-    }[];
+        value: number
+        end_time: string
+      }[]
+      title: "Profile Views"
+      description: string
+      id: string
+    }[]
     paging: {
-      previous: string;
-      next: string;
-    };
-  };
+      previous: string
+      next: string
+    }
+  }
   impressionsVsReach: {
     impressions: {
-      value: number;
-      end_time: string;
-    }[];
+      value: number
+      end_time: string
+    }[]
     reach: {
-      value: number;
-      end_time: string;
-    }[];
-  };
+      value: number
+      end_time: string
+    }[]
+  }
 }
 
 export interface InstagramFollowersResponse {
   total: {
-    followers_count: number;
-    id: string;
-  };
+    followers_count: number
+    id: string
+  }
   new: {
     data: {
-      name: "follower_count";
-      period: "day";
+      name: "follower_count"
+      period: "day"
       values: {
-        value: number;
-        end_time: string;
-      }[];
-      title: "Follower Count";
-      description: string;
-      id: string;
-    }[];
+        value: number
+        end_time: string
+      }[]
+      title: "Follower Count"
+      description: string
+      id: string
+    }[]
     paging: {
-      previous: string;
-      next: string;
-    };
-  };
+      previous: string
+      next: string
+    }
+  }
 }
 
 export interface InstagramEngagementResponse {
   data: [
     {
-      name: "total_interactions";
-      period: "day";
-      title: "Content interactions";
-      description: string;
+      name: "total_interactions"
+      period: "day"
+      title: "Content interactions"
+      description: string
       total_value: {
-        value: number;
-      };
-      id: string;
-    }
-  ];
+        value: number
+      }
+      id: string
+    },
+  ]
   paging: {
-    previous: string;
-    next: string;
-  };
+    previous: string
+    next: string
+  }
 }
 
 export interface InstagramProfileViewsResponse {
   data: {
-    name: "profile_views";
-    period: "day";
+    name: "profile_views"
+    period: "day"
     values: {
-      value: number;
-      end_time: string;
-    }[];
-    title: "Profile Views";
-    description: string;
-    id: string;
-  }[];
+      value: number
+      end_time: string
+    }[]
+    title: "Profile Views"
+    description: string
+    id: string
+  }[]
   paging: {
-    previous: string;
-    next: string;
-  };
+    previous: string
+    next: string
+  }
 }
 
 export interface InstagramPostsResponse {
-  media_count: number;
-  id: string;
+  media_count: number
+  id: string
 }
 
 export interface InstagramAccountAnalytics {
-  id: string;
-  name: string;
-  username: string;
-  followersCount: number;
-  mediaCount: number;
-  pageId: string;
+  id: string
+  name: string
+  username: string
+  followersCount: number
+  mediaCount: number
+  pageId: string
 }
 
 export type TimeSeriesPoint = { date: string; value: number }
@@ -293,104 +295,100 @@ export type UploadResponse = {
   files: UploadedFileInfo[]
 }
 
-// **NEW TYPE DEFINITIONS FOR FACEBOOK ANALYTICS**
 export interface FacebookPageInsights {
   report: {
     pageLikes: {
       data: Array<{
         values: Array<{
-          end_time?: string;
-          value?: number | string | null;
-        }>;
-      }>;
-    };
+          end_time?: string
+          value?: number | string | null
+        }>
+      }>
+    }
     pageReach: {
       data: Array<{
         values: Array<{
-          end_time?: string;
-          value?: number | string | null;
-        }>;
-      }>;
-    };
+          end_time?: string
+          value?: number | string | null
+        }>
+      }>
+    }
     totalEngagement: {
       data: Array<{
         values: Array<{
-          end_time?: string;
-          value?: number | string | null;
-        }>;
-      }>;
-    };
-  };
+          end_time?: string
+          value?: number | string | null
+        }>
+      }>
+    }
+  }
 }
 
 export interface FacebookPost {
-  id: string;
-  message?: string;
-  full_picture?: string;
-  created_time: string;
+  id: string
+  message?: string
+  full_picture?: string
+  created_time: string
 }
 
 export interface FacebookPostsResponse {
-  data: FacebookPost[];
+  data: FacebookPost[]
 }
 
 export interface FacebookPostDetails {
   post_details: {
-    id: string;
-    message?: string;
-    full_picture?: string;
-    created_time: string;
-  };
+    id: string
+    message?: string
+    full_picture?: string
+    created_time: string
+  }
   post_stats: {
-    post_impressions?: number;
-    post_impressions_unique?: number;
-    total_reactions?: number;
-    total_comments?: number;
-    total_shares?: number;
-    total_clicks?: number;
-    total_engagements?: number;
-    engagement_rate?: number;
-  };
+    post_impressions?: number
+    post_impressions_unique?: number
+    total_reactions?: number
+    total_comments?: number
+    total_shares?: number
+    total_clicks?: number
+    total_engagements?: number
+    engagement_rate?: number
+  }
 }
 
-// **NEW TYPE DEFINITIONS FOR INSTAGRAM ANALYTICS**
 export interface InstagramMedia {
-  id: string;
-  media_type: string;
-  media_url?: string;
-  thumbnail_url?: string;
-  caption?: string;
-  timestamp: string;
-  permalink: string;
+  id: string
+  media_type: string
+  media_url?: string
+  thumbnail_url?: string
+  caption?: string
+  timestamp: string
+  permalink: string
 }
 
 export interface InstagramMediaResponse {
-  data: InstagramMedia[];
+  data: InstagramMedia[]
 }
 
 export interface InstagramMediaDetails {
   media_details: {
-    id: string;
-    media_type: string;
-    media_url?: string;
-    thumbnail_url?: string;
-    caption?: string;
-    timestamp: string;
-    permalink: string;
-  };
+    id: string
+    media_type: string
+    media_url?: string
+    thumbnail_url?: string
+    caption?: string
+    timestamp: string
+    permalink: string
+  }
   media_stats: {
-    impressions?: number;
-    reach?: number;
-    engagement?: number;
-    likes?: number;
-    comments?: number;
-    shares?: number;
-    saves?: number;
-    
-  };
+    impressions?: number
+    reach?: number
+    engagement?: number
+    likes?: number
+    comments?: number
+    shares?: number
+    saves?: number
+  }
 }
 
-// Connection Status Types
 export interface ConnectionStatus {
   facebook: {
     connected: boolean
@@ -426,17 +424,12 @@ export interface TestResults {
   overall: boolean
 }
 
-/**
- * Upload media files to the Next.js in-memory upload API.
- * Returns short-lived public URLs suitable for Meta image_url/video_url fields.
- */
 export async function uploadMedia(files: File[]) {
-  // Upload files one by one following official approach
   const uploadedFiles = []
   for (const file of files) {
     const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
       method: "POST",
-      body: file, // send raw file in body
+      body: file,
     })
 
     if (!response.ok) {
@@ -457,16 +450,18 @@ class ApiClient {
   private baseUrl = API_BASE_URL
 
   private getHeaders(): Record<string, string> {
-    return {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      // Add any authentication headers here if needed
-      // "Authorization": `Bearer ${token}`,
     }
+    if (typeof window !== "undefined" && window.__clerk_user_id) {
+      headers["x-clerk-user-id"] = window.__clerk_user_id
+    }
+    return headers
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
-    
+
     const config: RequestInit = {
       ...options,
       headers: {
@@ -475,23 +470,43 @@ class ApiClient {
       },
     }
 
-    console.log("[v0] API Request:", { url, method: config.method || "GET" })
-    
     const response = await fetch(url, config)
-    
-    console.log("[v0] API Response:", { status: response.status, statusText: response.statusText })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("[v0] API Error Response:", errorText)
       throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
-    const data = await response.json()
-    console.log("[v0] API Response Data:", data)
-    return data
+    return response.json()
   }
 
+  async postToMultiplePlatformsMultipart(postRequest: PostRequest, files: File[]) {
+    const form = new FormData()
+    form.append("payload", JSON.stringify(postRequest))
+    files.forEach((f) => form.append("files", f, f.name))
+
+    const url = `${this.baseUrl}/api/social/post-multipart`
+    
+    const headers = new Headers();
+    if (typeof window !== "undefined" && window.__clerk_user_id) {
+      headers.append("x-clerk-user-id", window.__clerk_user_id);
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      body: form,
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+    
+    return response.json();
+  }
+  
+  // ... (The rest of the methods remain the same)
   // Authentication methods
   async getAuthStatus(): Promise<AuthStatus> {
     return this.request("/auth/status")
@@ -503,11 +518,10 @@ class ApiClient {
     })
   }
 
-  async selectFacebookPage(pageId: string): Promise<{ success: boolean; message: string; page: FacebookPage }> {
-    console.log("[v0] Calling selectFacebookPage with pageId:", pageId)
+  async selectFacebookPage(pageId: string, userId: string): Promise<{ success: boolean; message: string; page: FacebookPage }> {
     return this.request("/auth/facebook/select-page", {
       method: "POST",
-      body: JSON.stringify({ pageId }),
+      body: JSON.stringify({ pageId, userId }),
     })
   }
 
@@ -516,7 +530,6 @@ class ApiClient {
     try {
       return this.request("/auth/facebook/selected-page")
     } catch (error) {
-      console.error("No Facebook page selected:", error)
       return null
     }
   }
@@ -525,7 +538,6 @@ class ApiClient {
     try {
       return this.request("/auth/instagram/selected-account")
     } catch (error) {
-      console.error("No Instagram account selected:", error)
       return null
     }
   }
@@ -569,31 +581,6 @@ class ApiClient {
     })
   }
 
-  async postToMultiplePlatformsMultipart(postRequest: PostRequest, files: File[]) {
-    const form = new FormData()
-    form.append("payload", JSON.stringify(postRequest))
-    files.forEach((f) => form.append("files", f, f.name))
-    
-    const url = `${API_BASE_URL}/api/social/post-multipart`
-    console.log("[v0] API Multipart Request:", { url, files: files.length })
-    
-    const response = await fetch(url, {
-      method: "POST",
-      // Do not set Content-Type; browser will set multipart boundary
-      body: form,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[v0] API Multipart Error Response:", errorText)
-      throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
-    }
-
-    const data = await response.json()
-    console.log("[v0] API Multipart Response Data:", data)
-    return data
-  }
-
   // Analytics methods
   async getAnalyticsOverview(params?: { fbPageId?: string; igAccountId?: string }): Promise<AnalyticsOverview> {
     const searchParams = new URLSearchParams()
@@ -621,24 +608,34 @@ class ApiClient {
 
   // OAuth URLs
   getFacebookAuthUrl(state?: string): string {
-    const params = state ? `?state=${encodeURIComponent(state)}` : ""
+    const userState =
+      state ||
+      (typeof window !== "undefined" && window.__clerk_user_id
+        ? JSON.stringify({ userId: window.__clerk_user_id })
+        : "")
+    const params = userState ? `?state=${encodeURIComponent(userState)}` : ""
     return `${API_BASE_URL}/auth/facebook${params}`
   }
 
   getInstagramAuthUrl(state?: string): string {
-    const params = state ? `?state=${encodeURIComponent(state)}` : ""
+    const userState =
+      state ||
+      (typeof window !== "undefined" && window.__clerk_user_id
+        ? JSON.stringify({ userId: window.__clerk_user_id })
+        : "")
+    const params = userState ? `?state=${encodeURIComponent(userState)}` : ""
     return `${API_BASE_URL}/auth/instagram${params}`
   }
 
-  async selectInstagramAccount(accountId: string): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
-    console.log("[v0] Calling selectInstagramAccount with accountId:", accountId)
+  async selectInstagramAccount(
+    accountId: string,
+  ): Promise<{ success: boolean; message: string; account: InstagramAccount }> {
     return this.request("/auth/instagram/select-account", {
       method: "POST",
       body: JSON.stringify({ accountId }),
     })
   }
 
-  // **UPDATED FACEBOOK ANALYTICS METHODS WITH CORRECT TYPES**
   async getFacebookPagesAnalytics(): Promise<{ data: FacebookPage[] }> {
     const pages = await this.request<FacebookPage[]>("/api/social/analytics/facebook/pages")
     return { data: pages }
@@ -648,7 +645,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/facebook/page-insights?pageId=${encodeURIComponent(pageId)}`)
   }
 
-    async getFacebookPagePosts(params: {
+  async getFacebookPagePosts(params: {
     pageId: string
     after?: string
     before?: string
@@ -669,12 +666,10 @@ class ApiClient {
   }
 
   async getFacebookPostDetails(postId: string, accessToken: string): Promise<FacebookPostDetails> {
-    const q = new URLSearchParams({ accessToken });
-    return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}?${q.toString()}`);
+    const q = new URLSearchParams({ accessToken })
+    return this.request(`/api/social/analytics/facebook/post/${encodeURIComponent(postId)}?${q.toString()}`)
   }
 
-
-  // Connection testing methods
   async testConnections(): Promise<TestResults> {
     return this.request("/api/social/test-connections")
   }
@@ -683,7 +678,6 @@ class ApiClient {
     return this.request("/api/social/connection-status")
   }
 
-  // **UPDATED INSTAGRAM ANALYTICS METHODS WITH CORRECT TYPES**
   async getInstagramAccountsAnalytics(): Promise<InstagramAccount[]> {
     return this.request("/api/social/analytics/instagram/accounts")
   }
@@ -692,7 +686,7 @@ class ApiClient {
     return this.request(`/api/social/analytics/instagram/account-insights?accountId=${encodeURIComponent(accountId)}`)
   }
 
- async getInstagramAccountMedia(params: {
+  async getInstagramAccountMedia(params: {
     accountId: string
     after?: string
     limit?: number
@@ -705,33 +699,29 @@ class ApiClient {
   }
 
   async getInstagramMediaDetails(mediaId: string, accessToken: string): Promise<InstagramMediaDetails> {
-    const q = new URLSearchParams({ accessToken });
-    return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}?${q.toString()}`);
+    const q = new URLSearchParams({ accessToken })
+    return this.request(`/api/social/analytics/instagram/media/${encodeURIComponent(mediaId)}?${q.toString()}`)
   }
-//   async getInstagramAccountsAnalytics(): Promise<{ data: InstagramAccountAnalytics[] }> {
-//   const accounts = await this.request("/api/social/analytics/instagram/accounts")
-//   return { data: accounts }
-// }
 
-async getInstagramDashboard(businessId: string): Promise<InstagramDashboardReport> {
-  return this.request(`/api/social/analytics/instagram/dashboard?businessId=${encodeURIComponent(businessId)}`)
-}
+  async getInstagramDashboard(businessId: string): Promise<InstagramDashboardReport> {
+    return this.request(`/api/social/analytics/instagram/dashboard?businessId=${encodeURIComponent(businessId)}`)
+  }
 
-async getInstagramFollowers(businessId: string): Promise<InstagramFollowersResponse> {
-  return this.request(`/api/social/analytics/instagram/followers?businessId=${encodeURIComponent(businessId)}`)
-}
+  async getInstagramFollowers(businessId: string): Promise<InstagramFollowersResponse> {
+    return this.request(`/api/social/analytics/instagram/followers?businessId=${encodeURIComponent(businessId)}`)
+  }
 
-async getInstagramEngagement(businessId: string): Promise<InstagramEngagementResponse> {
-  return this.request(`/api/social/analytics/instagram/engagement?businessId=${encodeURIComponent(businessId)}`)
-}
+  async getInstagramEngagement(businessId: string): Promise<InstagramEngagementResponse> {
+    return this.request(`/api/social/analytics/instagram/engagement?businessId=${encodeURIComponent(businessId)}`)
+  }
 
-async getInstagramProfileViews(businessId: string): Promise<InstagramProfileViewsResponse> {
-  return this.request(`/api/social/analytics/instagram/profile-views?businessId=${encodeURIComponent(businessId)}`)
-}
+  async getInstagramProfileViews(businessId: string): Promise<InstagramProfileViewsResponse> {
+    return this.request(`/api/social/analytics/instagram/profile-views?businessId=${encodeURIComponent(businessId)}`)
+  }
 
-async getInstagramPosts(businessId: string): Promise<InstagramPostsResponse> {
-  return this.request(`/api/social/analytics/instagram/posts?businessId=${encodeURIComponent(businessId)}`)
-}
+  async getInstagramPosts(businessId: string): Promise<InstagramPostsResponse> {
+    return this.request(`/api/social/analytics/instagram/posts?businessId=${encodeURIComponent(businessId)}`)
+  }
 }
 
 export const apiClient = new ApiClient()
