@@ -424,24 +424,26 @@ export interface TestResults {
   overall: boolean
 }
 
+// src/lib/api.ts
+
 export async function uploadMedia(files: File[]) {
-  const uploadedFiles = []
+  const uploadedFiles = [];
   for (const file of files) {
-    const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
+    const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, {
       method: "POST",
       body: file,
-    })
+    });
 
     if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || "Failed to upload media")
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to upload media");
     }
 
-    const data = await response.json()
-    uploadedFiles.push(data)
+    const data = await response.json();
+    uploadedFiles.push(data);
   }
 
-  return { files: uploadedFiles }
+  return { files: uploadedFiles };
 }
 
 export type FbPage = FacebookPage
