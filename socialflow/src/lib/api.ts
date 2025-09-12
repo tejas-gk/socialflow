@@ -1,4 +1,6 @@
 // src/lib/api.ts
+import { upload } from '@vercel/blob/client';
+import type { PutBlobResult } from '@vercel/blob';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -424,25 +426,20 @@ export interface TestResults {
   overall: boolean
 }
 
-// src/lib/api.ts
-
-export async function uploadMedia(files: File[]) {
-  const uploadedFiles = [];
+export async function uploadMedia(files: File[]): Promise<{ files: PutBlobResult[] }> {
+  const uploadedFiles: PutBlobResult[] = [];
   for (const file of files) {
-    const response = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, {
-      method: "POST",
-      body: file,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to upload media");
+    try {
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/uploads', // This should point to your new API route
+      });
+      uploadedFiles.push(blob);
+    } catch (error) {
+      console.error("Upload failed for file:", file.name, error);
+      throw new Error(`Failed to upload ${file.name}. Please try again.`);
     }
-
-    const data = await response.json();
-    uploadedFiles.push(data);
   }
-
   return { files: uploadedFiles };
 }
 
@@ -508,7 +505,6 @@ class ApiClient {
     return response.json();
   }
   
-  // ... (The rest of the methods remain the same)
   // Authentication methods
   async getAuthStatus(): Promise<AuthStatus> {
     return this.request("/auth/status")
