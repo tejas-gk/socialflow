@@ -1,6 +1,13 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
+// Add this config to disable the body parser for this route
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 const token = process.env.BLOB_READ_WRITE_TOKEN || "";
 
 export async function POST(request: Request) {
