@@ -1,7 +1,14 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 
-// Define public routes (accessible without authentication)
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"])
+// --- START OF FIX ---
+// Define public routes, including the OAuth callback, to prevent Clerk from interfering.
+const isPublicRoute = createRouteMatcher([
+  "/", 
+  "/sign-in(.*)", 
+  "/sign-up(.*)",
+  "/auth/callback(.*)" // This allows the Facebook/Instagram redirect to work correctly.
+]);
+// --- END OF FIX ---
 
 export default clerkMiddleware(async (auth, req) => {
   // Protect all routes except public ones

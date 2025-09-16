@@ -5,9 +5,11 @@ import type { PutBlobResult } from '@vercel/blob';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
 export interface FacebookPage {
-  id: string
-  name: string
-  access_token?: string
+  id: string;
+  name: string;
+  access_token: string;
+  category: string;
+  tasks: string[];
 }
 
 export interface InstagramAccount {
@@ -540,9 +542,14 @@ class ApiClient {
     }
   }
 
-  async getFacebookPages(): Promise<FacebookPage[]> {
-    return this.request("/auth/facebook/pages")
+  // --- START OF FIX ---
+  // Update this method to accept an optional userId.
+  async getFacebookPages(userId?: string): Promise<FacebookPage[]> {
+    const endpoint = userId ? `/auth/facebook/pages?userId=${userId}` : "/auth/facebook/pages";
+    return this.request(endpoint);
   }
+  // --- END OF FIX ---
+
 
   async getInstagramAccounts(): Promise<InstagramAccount[]> {
     return this.request("/auth/instagram/accounts")

@@ -8,84 +8,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { PageSelection } from "@/components/page-selection"
-import { api } from "@/lib/api"
-
-interface FacebookPage {
-  id: string
-  name: string
-  category: string
-  access_token: string
-  tasks: string[]
-}
+import { api, type FacebookPage } from "@/lib/api"
 
 export default function AuthCallbackPage() {
   const [status, setStatus] = useState<"loading" | "success" | "error" | "page-selection">("loading")
-  const [message, setMessage] = useState("")
+  const [message, setMessage] = useState("Processing authentication...")
   const [pages, setPages] = useState<FacebookPage[]>([])
   const [isSelectingPage, setIsSelectingPage] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
-
-  useEffect(() => {
-    const success = searchParams.get("success")
-    const error = searchParams.get("error")
-    const platform = searchParams.get("platform")
-    const pagesParam = searchParams.get("pages")
-
-    if (error) {
-      setStatus("error")
-      setMessage(getErrorMessage(error))
-      return
-    }
-
-    if (success && platform) {
-      if (platform === "facebook" && pagesParam) {
-        try {
-          const facebookPages = JSON.parse(decodeURIComponent(pagesParam))
-          if (facebookPages.length > 1) {
-            setPages(facebookPages)
-            setStatus("page-selection")
-            setMessage("Please select which Facebook page you'd like to connect:")
-            return
-          } else if (facebookPages.length === 1) {
-            // Auto-select if only one page
-            handlePageSelection(facebookPages[0].id)
-            return
-          }
-        } catch (e) {
-          console.error("Failed to parse pages:", e)
-        }
-      }
-
-      setStatus("success")
-      setMessage(`${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully!`)
-
-      // Auto-redirect after 2 seconds
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 2000)
-    } else {
-      setStatus("error")
-      setMessage("Invalid authentication response")
-    }
-  }, [searchParams, router])
 
   const getErrorMessage = (error: string) => {
     switch (error) {
       case "no_code":
         return "Authentication was cancelled or failed"
       case "facebook_auth_failed":
-        return "Facebook authentication failed"
+        return "Facebook authentication failed. Please try again."
       case "instagram_auth_failed":
-        return "Instagram authentication failed"
+        return "Instagram authentication failed. Please try again."
       default:
-        return "Authentication failed"
+        return "An unknown authentication error occurred."
     }
   }
 
   const handlePageSelection = async (pageId: string) => {
     setIsSelectingPage(true)
-    // --- START OF FIX ---
     const userId = searchParams.get("userId")
     if (!userId) {
       setStatus("error")
@@ -93,22 +40,13 @@ export default function AuthCallbackPage() {
       setIsSelectingPage(false)
       return
     }
-    // --- END OF FIX ---
+    
     try {
-      console.log("[v0] Selecting Facebook page:", pageId)
-      // --- START OF FIX ---
       const response = await api.selectFacebookPage(pageId, userId)
-      // --- END OF FIX ---
-      console.log("[v0] Page selection response:", response)
-
       if (response.success) {
         setStatus("success")
         setMessage("Facebook page connected successfully!")
-
-        // Redirect after 2 seconds
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 2000)
+        setTimeout(() => router.push("/dashboard"), 2000)
       } else {
         throw new Error(response.message || "Failed to connect page")
       }
@@ -121,6 +59,65 @@ export default function AuthCallbackPage() {
       setIsSelectingPage(false)
     }
   }
+
+  useEffect(() => {
+    const success = searchParams.get("success")
+    const error = searchParams.get("error")
+    const platform = searchParams.get("platform")
+    // --- START OF FIX ---
+    const userId = searchParams.get("userId")
+    // --- END OF FIX ---
+
+    const handleFacebookSuccess = async () => {
+      // --- START OF FIX ---
+      if (!userId) {
+        setStatus("error");
+        setMessage("Authentication session is invalid. Please try connecting again from the dashboard.");
+        return;
+      }
+      // --- END OF FIX ---
+      try {
+        setMessage("Fetching your Facebook pages...")
+        // --- START OF FIX ---
+        const facebookPages = await api.getFacebookPages(userId)
+        // --- END OF FIX ---
+        
+        if (facebookPages && facebookPages.length > 1) {
+          setPages(facebookPages)
+          setStatus("page-selection")
+        } else if (facebookPages && facebookPages.length === 1) {
+          await handlePageSelection(facebookPages[0].id)
+        } else {
+          setStatus("success")
+          setMessage("Facebook connected, but no manageable pages were found.")
+          setTimeout(() => router.push("/dashboard"), 3000)
+        }
+      } catch (e) {
+        setStatus("error")
+        setMessage("Failed to retrieve your pages after connection. Please try again from the dashboard.")
+      }
+    }
+
+    if (error) {
+      setStatus("error")
+      setMessage(getErrorMessage(error))
+      return
+    }
+
+    if (success && platform) {
+      if (platform === "facebook") {
+        handleFacebookSuccess()
+      } else {
+        setStatus("success")
+        setMessage(`${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully!`)
+        setTimeout(() => router.push("/dashboard"), 2000)
+      }
+    } else {
+      setStatus("error")
+      setMessage("Invalid authentication response received.")
+    }
+  }, [searchParams, router])
+
 
   if (status === "page-selection") {
     return (
