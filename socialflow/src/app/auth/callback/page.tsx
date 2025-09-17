@@ -64,23 +64,18 @@ export default function AuthCallbackPage() {
     const success = searchParams.get("success")
     const error = searchParams.get("error")
     const platform = searchParams.get("platform")
-    // --- START OF FIX ---
     const userId = searchParams.get("userId")
-    // --- END OF FIX ---
 
     const handleFacebookSuccess = async () => {
-      // --- START OF FIX ---
       if (!userId) {
         setStatus("error");
         setMessage("Authentication session is invalid. Please try connecting again from the dashboard.");
         return;
       }
-      // --- END OF FIX ---
       try {
         setMessage("Fetching your Facebook pages...")
-        // --- START OF FIX ---
+        console.log("[v0] Fetching Facebook pages for userId:", userId)
         const facebookPages = await api.getFacebookPages(userId)
-        // --- END OF FIX ---
         
         if (facebookPages && facebookPages.length > 1) {
           setPages(facebookPages)

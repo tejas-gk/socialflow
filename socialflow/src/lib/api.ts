@@ -1,6 +1,6 @@
-// src/lib/api.ts
 import { upload } from '@vercel/blob/client';
 import type { PutBlobResult } from '@vercel/blob';
+import { useAuth } from "@clerk/nextjs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -457,6 +457,7 @@ class ApiClient {
     if (typeof window !== "undefined" && window.__clerk_user_id) {
       headers["x-clerk-user-id"] = window.__clerk_user_id
     }
+    console.log("Request headers:", headers)
     return headers
   }
 
@@ -542,13 +543,10 @@ class ApiClient {
     }
   }
 
-  // --- START OF FIX ---
-  // Update this method to accept an optional userId.
   async getFacebookPages(userId?: string): Promise<FacebookPage[]> {
     const endpoint = userId ? `/auth/facebook/pages?userId=${userId}` : "/auth/facebook/pages";
     return this.request(endpoint);
   }
-  // --- END OF FIX ---
 
 
   async getInstagramAccounts(): Promise<InstagramAccount[]> {

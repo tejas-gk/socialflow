@@ -5,9 +5,9 @@ import { useUser, SignOutButton, UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi, LogOut } from "lucide-react"
+import { History, Plus, Settings, TrendingUp, Facebook, Instagram, Wifi } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"// Import the Next.js Image component
+import Image from "next/image"
 import useSWR from "swr"
 import {
   apiClient,
@@ -36,21 +36,21 @@ export default function DashboardPage() {
     if (user?.id && typeof window !== "undefined") {
       window.__clerk_user_id = user.id
     }
+    console.log("User ID set in window:", window.__clerk_user_id)
   }, [user?.id])
 
-  // Fetch Facebook posts
   const { data: fbPosts, isLoading: fbPostsLoading } = useSWR(
     authStatus.facebook && selectedFacebookPage ? ["fb-posts", selectedFacebookPage.id] : null,
     () => apiClient.getFacebookPagePosts({ pageId: selectedFacebookPage!.id, limit: 3 }),
   )
 
-  // Fetch Instagram posts
   const { data: igPosts, isLoading: igPostsLoading } = useSWR(
     authStatus.instagram && selectedInstagramAccount ? ["ig-media", selectedInstagramAccount.id] : null,
     () => apiClient.getInstagramAccountMedia({ accountId: selectedInstagramAccount!.id, limit: 3 }),
   )
 
   const fetchAuthStatus = async () => {
+    console.log("Fetching auth status...", user);
     try {
       const status = await apiClient.getAuthStatus()
       setAuthStatus(status)
@@ -93,7 +93,7 @@ export default function DashboardPage() {
     try {
       const result = await apiClient.disconnectPlatform(platform);
       if (result.success) {
-        await fetchAuthStatus(); // Refresh the UI to show the disconnected state
+        await fetchAuthStatus();
       } else {
         console.error(`Failed to disconnect ${platform}`);
       }
@@ -162,16 +162,21 @@ export default function DashboardPage() {
     return "User"
   }
 
+
+  const getFacebookAuthUrl = (state?: string): string => {
+    const userState =
+      state || (user ? JSON.stringify({ userId: user.id }) : "");
+    const params = userState ? `?state=${encodeURIComponent(userState)}` : "";
+    return `${process.env.NEXT_PUBLIC_API_URL}/auth/facebook${params}`;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-black font-serif text-primary">SocialFlow</h1>
-              <Badge variant="secondary" className="hidden md:inline-flex">
-                Pro
-              </Badge>
+              <h1 className="text-2xl font-black font-serif text-primary">Raj Connect</h1>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4">
               <Button
@@ -180,7 +185,7 @@ export default function DashboardPage() {
                 onClick={() =>
                   authStatus.facebook
                     ? setShowFacebookPageModal(true)
-                    : window.open(apiClient.getFacebookAuthUrl(), "_blank")
+                    : window.open(getFacebookAuthUrl(), "_blank")
                 }
                 title={authStatus.facebook ? "Facebook Connected - Manage" : "Connect Facebook"}
               >
@@ -287,21 +292,19 @@ export default function DashboardPage() {
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                   <button
                     onClick={() => setActiveTab("facebook")}
-                    className={`${
-                      activeTab === "facebook"
+                    className={`${activeTab === "facebook"
                         ? "border-primary text-primary"
                         : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                   >
                     Facebook
                   </button>
                   <button
                     onClick={() => setActiveTab("instagram")}
-                    className={`${
-                      activeTab === "instagram"
+                    className={`${activeTab === "instagram"
                         ? "border-primary text-primary"
                         : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                   >
                     Instagram
                   </button>
@@ -505,7 +508,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="font-medium">Instagram</p>
                       <p className="text-sm text-muted-foreground">
-                         {authStatus.instagram ? `Connected as @${selectedInstagramAccount?.username || 'Account'}` : 'Not Connected'}
+                        {authStatus.instagram ? `Connected as @${selectedInstagramAccount?.username || 'Account'}` : 'Not Connected'}
                       </p>
                     </div>
                   </div>
