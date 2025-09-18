@@ -473,47 +473,79 @@ export default function DashboardPage() {
   }
 
   const fetchInstagramInsights = async (account: InstagramAccount) => {
-    console.log("Fetching Instagram insights for account:", account)
+    console.log("Fetching Instagram insights for account:", account);
+
     try {
-      const response = await fetch(
-        `https://graph.facebook.com/v23.0/${account.id}/insights?metric=impressions,reach,profile_views,website_clicks&period=day&access_token=${(account as any).access_token}`,
-      )
+      // Define the metrics you want
+      const metrics = "reach,follower_count,profile_views,website_clicks";
 
-      if (response.ok) {
-        const data = await response.json()
-        const insights: InstagramInsights = {
-          impressions: 0,
-          reach: 0,
-          profile_views: 0,
-          website_clicks: 0,
-          follower_count: account.followers_count || 0,
-          media_count: account.media_count || 0,
-        }
+      // First call for metrics that don’t need metric_type
+      const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`;
 
-        data.data?.forEach((metric: any) => {
-          const value = metric.values?.[0]?.value || 0
-          switch (metric.name) {
-            case "impressions":
-              insights.impressions = value
-              break
-            case "reach":
-              insights.reach = value
-              break
-            case "profile_views":
-              insights.profile_views = value
-              break
-            case "website_clicks":
-              insights.website_clicks = value
-              break
-          }
-        })
+      // Metrics that don’t need metric_type
+      const normalMetrics = "reach,follower_count";
 
-        setInstagramInsights(insights)
+      // Metrics that need metric_type=total_value
+      const totalMetrics = "profile_views,website_clicks";
+
+      // Fetch reach and follower_count
+      const res1 = await fetch(
+        `${baseUrl}?metric=${normalMetrics}&period=day&access_token=${(account as any).access_token}`
+      );
+
+      // Fetch profile_views and website_clicks (need metric_type)
+      const res2 = await fetch(
+        `${baseUrl}?metric=${totalMetrics}&period=day&metric_type=total_value&access_token=${(account as any).access_token}`
+      );
+
+      if (!res1.ok || !res2.ok) {
+        console.error("Error fetching Instagram insights:", await res1.text(), await res2.text());
+        return;
       }
+
+      const data1 = await res1.json();
+      const data2 = await res2.json();
+
+      // Combine both data arrays
+      const allMetrics = [...(data1.data || []), ...(data2.data || [])];
+
+      console.log("Instagram insights data:", allMetrics);
+
+      // Default values
+      const insights: InstagramInsights = {
+        impressions: 0,
+        reach: 0,
+        profile_views: 0,
+        website_clicks: 0,
+        follower_count: account.followers_count || 0,
+        media_count: account.media_count || 0,
+      };
+
+      // Map API results into our insights object
+      allMetrics.forEach((metric: any) => {
+        const value = metric.values?.[0]?.value || 0;
+        switch (metric.name) {
+          case "reach":
+            insights.reach = value;
+            break;
+          case "follower_count":
+            insights.follower_count = value;
+            break;
+          case "profile_views":
+            insights.profile_views = value;
+            break;
+          case "website_clicks":
+            insights.website_clicks = value;
+            break;
+        }
+      });
+
+      setInstagramInsights(insights);
     } catch (err) {
-      console.error("Failed to fetch Instagram insights:", err)
+      console.error("Failed to fetch Instagram insights:", err);
     }
-  }
+  };
+
 
   const fetchPostAnalytics = async (page: FacebookPage) => {
     try {
@@ -626,6 +658,7 @@ export default function DashboardPage() {
     if (selectedFacebookPage) {
       fetchFacebookPagePosts(selectedFacebookPage)
       fetchPageInsights(selectedFacebookPage)
+      fetchDemographics(selectedFacebookPage)
     }
   }, [selectedFacebookPage])
 
@@ -633,6 +666,7 @@ export default function DashboardPage() {
     if (selectedInstagramAccount) {
       fetchInstagramPosts(selectedInstagramAccount)
       fetchInstagramInsights(selectedInstagramAccount)
+      
     }
   }, [selectedInstagramAccount])
 
@@ -1755,10 +1789,10 @@ export default function DashboardPage() {
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
+              {/* <TabsTrigger value="overview">Overview</TabsTrigger> */}
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="posts">Posts</TabsTrigger>
-              <TabsTrigger value="demographics">Demographics</TabsTrigger>
+              {/* <TabsTrigger value="demographics">Demographics</TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -1837,6 +1871,65 @@ export default function DashboardPage() {
                 </TabsList>
 
                 <TabsContent value="facebook">
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Followers</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {(facebookInsights?.page_fans || 0) + (instagramInsights?.follower_count || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Impressions</CardTitle>
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {(facebookInsights?.page_impressions || 0) + (instagramInsights?.impressions || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Reach</CardTitle>
+                        <Target className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {(facebookInsights?.page_engaged_users || 0) + (instagramInsights?.reach || 0)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          FB: {facebookInsights?.page_engaged_users || 0} | IG: {instagramInsights?.reach || 0}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
+                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{facebookPosts.length + instagramPosts.length}</div>
+                        <p className="text-xs text-muted-foreground">
+                          FB: {facebookPosts.length} | IG: {instagramPosts.length}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
                   {facebookInsights && (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
@@ -1876,6 +1969,33 @@ export default function DashboardPage() {
                 </TabsContent>
 
                 <TabsContent value="instagram">
+                  {
+                    selectedInstagramAccount &&
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                  
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm">Username</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
+                          </CardContent>
+                          
+                        </Card>
+                    </div>
+                  }
+                  {selectedInstagramAccount && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Followers</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedInstagramAccount.followers_count}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                   {instagramInsights && (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
