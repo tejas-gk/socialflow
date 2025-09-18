@@ -437,7 +437,7 @@ export default function DashboardPage() {
           if (metric.name === "page_fans_gender_age") {
             Object.entries(latestValue).forEach(([key, value]) => {
               const [gender, age] = key.split(".")
-              const existingAge = demographics.age_gender.find((item:any) => item.age === age)
+              const existingAge = demographics.age_gender.find((item: any) => item.age === age)
               if (existingAge) {
                 existingAge[gender as "male" | "female"] = value as number
               } else {
@@ -619,7 +619,7 @@ export default function DashboardPage() {
           if (metric.name === "page_fans_gender_age") {
             Object.entries(latestValue).forEach(([key, value]) => {
               const [gender, age] = key.split(".")
-              const existingAge = demographics.age_gender.find((item:any) => item.age === age)
+              const existingAge = demographics.age_gender.find((item: any) => item.age === age)
               if (existingAge) {
                 existingAge[gender === "M" ? "male" : "female"] = value as number
               } else {
@@ -666,7 +666,7 @@ export default function DashboardPage() {
     if (selectedInstagramAccount) {
       fetchInstagramPosts(selectedInstagramAccount)
       fetchInstagramInsights(selectedInstagramAccount)
-      
+
     }
   }, [selectedInstagramAccount])
 
@@ -1972,16 +1972,16 @@ export default function DashboardPage() {
                   {
                     selectedInstagramAccount &&
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                  
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">Username</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
-                          </CardContent>
-                          
-                        </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Username</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
+                        </CardContent>
+
+                      </Card>
                     </div>
                   }
                   {selectedInstagramAccount && (
@@ -2126,7 +2126,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        {demographics.age_gender.map((item:any) => (
+                        {demographics.age_gender.map((item: any) => (
                           <div key={item.age} className="flex justify-between items-center">
                             <span className="text-sm font-medium">{item.age}</span>
                             <div className="flex gap-4 text-sm">
@@ -2304,6 +2304,25 @@ export default function DashboardPage() {
                     )}
                     @{account.username}
                     {selectedInstagramAccount?.id === account.id && <span className="ml-auto text-green-600">✓</span>}
+                  </Button>
+                ))}
+              </div>
+            )}
+            {facebookPages.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Facebook className="h-4 w-4 text-blue-600" />
+                  Facebook Pages
+                </Label>
+                {facebookPages.map((page) => (
+                  <Button
+                    key={page.id}
+                    variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handlePageSelection(page)}
+                  >
+                    {page.name}
+                    {selectedFacebookPage?.id === page.id && <span className="ml-auto text-green-600">✓</span>}
                   </Button>
                 ))}
               </div>
