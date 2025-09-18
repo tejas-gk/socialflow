@@ -2000,10 +2000,10 @@ export default function DashboardPage() {
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-sm">Followers</CardTitle>
+                          <CardTitle className="text-sm">website clicks</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold">{instagramInsights.follower_count}</div>
+                          <div className="text-2xl font-bold">{instagramInsights.website_clicks}</div>
                         </CardContent>
                       </Card>
                       <Card>
