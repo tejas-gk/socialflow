@@ -30,12 +30,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    // <ClerkProvider>
       <html lang="en" className={`${montserrat.variable} ${openSans.variable} antialiased`}>
         <body className="font-sans" suppressHydrationWarning={true}>
           {children}
         </body>
       </html>
-    </ClerkProvider>
+
   );
 }
