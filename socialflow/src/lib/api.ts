@@ -1,6 +1,5 @@
 import { upload } from '@vercel/blob/client';
 import type { PutBlobResult } from '@vercel/blob';
-import { useAuth } from "@clerk/nextjs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -531,6 +530,7 @@ class ApiClient {
     try {
       return this.request("/auth/facebook/selected-page")
     } catch (error) {
+      console.log(error)
       return null
     }
   }
@@ -539,6 +539,7 @@ class ApiClient {
     try {
       return this.request("/auth/instagram/selected-account")
     } catch (error) {
+      console.log(error)
       return null
     }
   }
