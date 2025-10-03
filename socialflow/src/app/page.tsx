@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,9 @@ import {
   X,
   ChevronDown,
   Check,
+  Smile,
+  Hash,
+  AlertCircle,
 } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -37,6 +40,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import EmojiPicker from "emoji-picker-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface FacebookPage {
   id: string
@@ -160,8 +165,25 @@ export default function DashboardPage() {
   const [postType, setPostType] = useState<"post" | "reel" | "carousel">("post")
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [filePreviews, setFilePreviews] = useState<string[]>([])
+  const [fileTypes, setFileTypes] = useState<string[]>([])
 
   const [showPageSwitcher, setShowPageSwitcher] = useState(false)
+
+  // Added state for emoji and hashtag pickers
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showHashtagPicker, setShowHashtagPicker] = useState(false)
+
+  // Added state for selected platforms
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+
+  const [mentionSuggestions, setMentionSuggestions] = useState<Array<{ id: string; name: string }>>([])
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionSearchQuery, setMentionSearchQuery] = useState("")
+  const [isSearchingMentions, setIsSearchingMentions] = useState(false)
+  const [mentionCursorPosition, setMentionCursorPosition] = useState(0)
+  const [taggedPeopleMap, setTaggedPeopleMap] = useState<Map<string, string>>(new Map()) // name -> id mapping
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     const savedFacebookToken = localStorage.getItem("facebook_access_token")
@@ -173,12 +195,14 @@ export default function DashboardPage() {
       setFacebookAccessToken(savedFacebookToken)
       setIsFacebookTokenSet(true)
       fetchFacebookPages(savedFacebookToken)
+      setSelectedPlatforms((prev) => [...prev, "facebook"])
     }
 
     if (savedInstagramToken) {
       setInstagramAccessToken(savedInstagramToken)
       setIsInstagramTokenSet(true)
       fetchInstagramAccounts(savedInstagramToken)
+      setSelectedPlatforms((prev) => [...prev, "instagram"])
     }
 
     if (savedFacebookPage) {
@@ -229,10 +253,12 @@ export default function DashboardPage() {
             setFacebookAccessToken(savedToken)
             setIsFacebookTokenSet(true)
             fetchFacebookPages(savedToken)
+            setSelectedPlatforms((prev) => [...prev, "facebook"])
           } else {
             setInstagramAccessToken(savedToken)
             setIsInstagramTokenSet(true)
             fetchInstagramAccounts(savedToken)
+            setSelectedPlatforms((prev) => [...prev, "instagram"])
           }
           setShowTokenModal(false)
         }
@@ -305,10 +331,13 @@ export default function DashboardPage() {
 
               if (igAccountResponse.ok) {
                 const accountData = await igAccountResponse.json()
-                accounts.push({
-                  ...accountData,
-                  access_token: page.access_token,
-                })
+                setInstagramAccounts((prevAccounts) => [
+                  ...prevAccounts,
+                  {
+                    ...accountData,
+                    access_token: page.access_token,
+                  },
+                ])
               }
             }
           }
@@ -316,8 +345,6 @@ export default function DashboardPage() {
           console.log("No Instagram account for page:", page.name)
         }
       }
-
-      setInstagramAccounts(accounts)
 
       if (accounts.length > 0 && !selectedInstagramAccount) {
         setShowPageModal(true)
@@ -473,43 +500,43 @@ export default function DashboardPage() {
   }
 
   const fetchInstagramInsights = async (account: InstagramAccount) => {
-    console.log("Fetching Instagram insights for account:", account);
+    console.log("Fetching Instagram insights for account:", account)
 
     try {
       // Define the metrics you want
-      const metrics = "reach,follower_count,profile_views,website_clicks";
+      const metrics = "reach,follower_count,profile_views,website_clicks"
 
       // First call for metrics that don’t need metric_type
-      const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`;
+      const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`
 
       // Metrics that don’t need metric_type
-      const normalMetrics = "reach,follower_count";
+      const normalMetrics = "reach,follower_count"
 
       // Metrics that need metric_type=total_value
-      const totalMetrics = "profile_views,website_clicks";
+      const totalMetrics = "profile_views,website_clicks"
 
       // Fetch reach and follower_count
       const res1 = await fetch(
-        `${baseUrl}?metric=${normalMetrics}&period=day&access_token=${(account as any).access_token}`
-      );
+        `${baseUrl}?metric=${normalMetrics}&period=day&access_token=${(account as any).access_token}`,
+      )
 
       // Fetch profile_views and website_clicks (need metric_type)
       const res2 = await fetch(
-        `${baseUrl}?metric=${totalMetrics}&period=day&metric_type=total_value&access_token=${(account as any).access_token}`
-      );
+        `${baseUrl}?metric=${totalMetrics}&period=day&metric_type=total_value&access_token=${(account as any).access_token}`,
+      )
 
       if (!res1.ok || !res2.ok) {
-        console.error("Error fetching Instagram insights:", await res1.text(), await res2.text());
-        return;
+        console.error("Error fetching Instagram insights:", await res1.text(), await res2.text())
+        return
       }
 
-      const data1 = await res1.json();
-      const data2 = await res2.json();
+      const data1 = await res1.json()
+      const data2 = await res2.json()
 
       // Combine both data arrays
-      const allMetrics = [...(data1.data || []), ...(data2.data || [])];
+      const allMetrics = [...(data1.data || []), ...(data2.data || [])]
 
-      console.log("Instagram insights data:", allMetrics);
+      console.log("Instagram insights data:", allMetrics)
 
       // Default values
       const insights: InstagramInsights = {
@@ -519,33 +546,32 @@ export default function DashboardPage() {
         website_clicks: 0,
         follower_count: account.followers_count || 0,
         media_count: account.media_count || 0,
-      };
+      }
 
       // Map API results into our insights object
       allMetrics.forEach((metric: any) => {
-        const value = metric.values?.[0]?.value || 0;
+        const value = metric.values?.[0]?.value || 0
         switch (metric.name) {
           case "reach":
-            insights.reach = value;
-            break;
+            insights.reach = value
+            break
           case "follower_count":
-            insights.follower_count = value;
-            break;
+            insights.follower_count = value
+            break
           case "profile_views":
-            insights.profile_views = value;
-            break;
+            insights.profile_views = value
+            break
           case "website_clicks":
-            insights.website_clicks = value;
-            break;
+            insights.website_clicks = value
+            break
         }
-      });
+      })
 
-      setInstagramInsights(insights);
+      setInstagramInsights(insights)
     } catch (err) {
-      console.error("Failed to fetch Instagram insights:", err);
+      console.error("Failed to fetch Instagram insights:", err)
     }
-  };
-
+  }
 
   const fetchPostAnalytics = async (page: FacebookPage) => {
     try {
@@ -666,7 +692,6 @@ export default function DashboardPage() {
     if (selectedInstagramAccount) {
       fetchInstagramPosts(selectedInstagramAccount)
       fetchInstagramInsights(selectedInstagramAccount)
-
     }
   }, [selectedInstagramAccount])
 
@@ -764,6 +789,10 @@ export default function DashboardPage() {
         return "Instagram captions cannot exceed 2,200 characters"
       }
 
+      if (isScheduled && scheduledDate) {
+        return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
+      }
+
       // Instagram reel validations
       if (postType === "reel") {
         if (selectedFiles.length !== 1) {
@@ -773,8 +802,6 @@ export default function DashboardPage() {
         if (!file.type.startsWith("video/")) {
           return "Instagram reels must be video files"
         }
-        // Instagram reel duration limits (15 seconds to 90 seconds)
-        // Note: We can't check duration without loading the video, but we can validate file type
       }
 
       // Instagram carousel validations
@@ -889,11 +916,6 @@ export default function DashboardPage() {
       if (scheduled > sixMonthsFromNow) {
         return "Posts cannot be scheduled more than 6 months in advance"
       }
-
-      // Instagram has more limited scheduling capabilities
-      if (postToInstagram && postType === "reel") {
-        return "Instagram reels cannot be scheduled"
-      }
     }
 
     return null
@@ -921,13 +943,13 @@ export default function DashboardPage() {
 
       // Post to Facebook if selected
       if (postToFacebook && selectedFacebookPage) {
-        await postToFacebook_Platform(fileUrls)
+        await postToFacebookPage(fileUrls)
         results.push("Facebook")
       }
 
       // Post to Instagram if selected
       if (postToInstagram && selectedInstagramAccount) {
-        await postToInstagram_Platform(fileUrls)
+        await postToInstagramAccount(fileUrls)
         results.push("Instagram")
       }
 
@@ -940,6 +962,9 @@ export default function DashboardPage() {
       setIsScheduled(false)
       setShowPostModal(false)
       setPostType("post")
+      setSelectedPlatforms([])
+      setTaggedPeopleMap(new Map())
+      setFileTypes([]) // Reset file types
 
       // Refresh posts
       if (postToFacebook && selectedFacebookPage) {
@@ -957,34 +982,50 @@ export default function DashboardPage() {
     }
   }
 
-  const postToFacebook_Platform = async (fileUrls: string[]) => {
+  const postToFacebookPage = async (fileUrls: string[]) => {
+    if (!selectedFacebookPage) return
+
+    const taggedIds = extractTaggedPeople()
+
+    // ✅ Handle carousel posts (multiple images)
     if (postType === "carousel" && fileUrls.length > 1) {
-      // Facebook carousel post
       const attachedMedia = []
 
       for (const url of fileUrls) {
+        // ✅ Upload each image via FormData so Facebook can read it
+        const formData = new FormData()
+        formData.append("access_token", selectedFacebookPage!.access_token)
+        formData.append("published", "false")
+
+        // Try fetching image binary (from S3 or Supabase)
+        const fileResponse = await fetch(url)
+        const blob = await fileResponse.blob()
+        formData.append("source", blob)
+
         const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/photos`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: url,
-            published: false,
-            access_token: selectedFacebookPage!.access_token,
-          }),
+          body: formData,
         })
 
         if (!photoResponse.ok) {
-          throw new Error("Failed to upload photo for carousel")
+          const errData = await photoResponse.json()
+          console.error("❌ Carousel image upload failed:", errData)
+          throw new Error(errData.error?.message || "Failed to upload image for carousel")
         }
 
         const photoResult = await photoResponse.json()
         attachedMedia.push({ media_fbid: photoResult.id })
       }
 
+      // ✅ Create carousel post
       const postData: any = {
         message: postContent,
         attached_media: attachedMedia,
         access_token: selectedFacebookPage!.access_token,
+      }
+
+      if (taggedIds.length > 0) {
+        postData.tags = taggedIds.join(",")
       }
 
       if (isScheduled && scheduledDate && scheduledTime) {
@@ -1000,59 +1041,146 @@ export default function DashboardPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || "Failed to post carousel to Facebook")
-      }
-    } else if (postType === "reel" && fileUrls.length > 0) {
-      // Facebook Reel
-      const postData: any = {
-        description: postContent,
-        video_url: fileUrls[0],
-        upload_phase: "start",
-        access_token: selectedFacebookPage!.access_token,
+        const errData = await response.json()
+        console.error("❌ Carousel post failed:", errData)
+        throw new Error(errData.error?.message || "Failed to post carousel to Facebook")
       }
 
-      const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/video_reels`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData),
-      })
+      return
+    }
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || "Failed to post reel to Facebook")
+    if (fileUrls.length > 0) {
+      const isVideo = fileTypes[0]?.startsWith("video/")
+
+      if (isVideo) {
+        // Phase 1: Start upload session
+        const startFormData = new FormData()
+        startFormData.append("access_token", selectedFacebookPage!.access_token)
+        startFormData.append("upload_phase", "start")
+
+        const fileResponse = await fetch(fileUrls[0])
+        const blob = await fileResponse.blob()
+        const fileSizeInBytes = blob.size
+
+        startFormData.append("file_size", fileSizeInBytes.toString())
+
+        const startResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
+          method: "POST",
+          body: startFormData,
+        })
+
+        if (!startResponse.ok) {
+          const errData = await startResponse.json()
+          console.error("❌ Video upload start phase failed:", errData)
+          throw new Error(errData.error?.message || "Failed to start video upload")
+        }
+
+        const startResult = await startResponse.json()
+        const uploadSessionId = startResult.upload_session_id
+
+        // Phase 2: Transfer video data
+        const transferFormData = new FormData()
+        transferFormData.append("access_token", selectedFacebookPage!.access_token)
+        transferFormData.append("upload_phase", "transfer")
+        transferFormData.append("upload_session_id", uploadSessionId)
+        transferFormData.append("start_offset", "0")
+        transferFormData.append("video_file_chunk", blob)
+
+        const transferResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
+          method: "POST",
+          body: transferFormData,
+        })
+
+        if (!transferResponse.ok) {
+          const errData = await transferResponse.json()
+          console.error("❌ Video upload transfer phase failed:", errData)
+          throw new Error(errData.error?.message || "Failed to transfer video")
+        }
+
+        // Phase 3: Finish upload and publish
+        const finishFormData = new FormData()
+        finishFormData.append("access_token", selectedFacebookPage!.access_token)
+        finishFormData.append("upload_phase", "finish")
+        finishFormData.append("upload_session_id", uploadSessionId)
+        finishFormData.append("description", postContent)
+
+        if (taggedIds.length > 0) {
+          finishFormData.append("tags", taggedIds.join(","))
+        }
+
+        if (isScheduled && scheduledDate && scheduledTime) {
+          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          finishFormData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
+          finishFormData.append("published", "false")
+        }
+
+        const finishResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
+          method: "POST",
+          body: finishFormData,
+        })
+
+        if (!finishResponse.ok) {
+          const errData = await finishResponse.json()
+          console.error("❌ Video upload finish phase failed:", errData)
+          throw new Error(errData.error?.message || "Failed to finish video upload")
+        }
+      } else {
+        const formData = new FormData()
+        formData.append("caption", postContent)
+        formData.append("access_token", selectedFacebookPage!.access_token)
+
+        const fileResponse = await fetch(fileUrls[0])
+        const blob = await fileResponse.blob()
+        formData.append("source", blob)
+
+        if (taggedIds.length > 0) {
+          formData.append("tags", taggedIds.join(","))
+        }
+
+        if (isScheduled && scheduledDate && scheduledTime) {
+          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          formData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
+          formData.append("published", "false")
+        }
+
+        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/photos`, {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const errData = await response.json()
+          console.error("❌ Photo post failed:", errData)
+          throw new Error(errData.error?.message || "Failed to upload photo to Facebook")
+        }
       }
     } else {
-      // Regular Facebook post
+      // Text-only post
       const postData: any = {
         message: postContent,
         access_token: selectedFacebookPage!.access_token,
       }
 
-      if (fileUrls.length > 0) {
-        postData.url = fileUrls[0]
+      if (taggedIds.length > 0) {
+        postData.tags = taggedIds.join(",")
       }
 
       if (isScheduled && scheduledDate && scheduledTime) {
         const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-        postData.scheduled_publish_time = Math.floor(scheduledDateTime.getTime() / 1000)
-        postData.published = false
+        postData["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000)
+        postData["published"] = false
       }
 
-      const endpoint =
-        fileUrls.length > 0
-          ? `https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/photos`
-          : `https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/feed`
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/feed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(postData),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || "Failed to post to Facebook")
+        const errData = await response.json()
+        console.error("❌ Text post failed:", errData)
+        throw new Error(errData.error?.message || "Failed to post text to Facebook")
       }
     }
   }
@@ -1090,14 +1218,19 @@ export default function DashboardPage() {
     throw new Error("Media processing timeout - please try again")
   }
 
-  const postToInstagram_Platform = async (fileUrls: string[]) => {
+  const postToInstagramAccount = async (fileUrls: string[]) => {
+    if (!selectedInstagramAccount) return
+
     if (postType === "carousel" && fileUrls.length > 1) {
       // Instagram carousel post
       const mediaIds = []
 
-      for (const url of fileUrls) {
-        const isVideo = selectedFiles.find((f) => f.type.startsWith("video/"))
+      for (let i = 0; i < fileUrls.length; i++) {
+        const url = fileUrls[i]
+        const isVideo = fileTypes[i]?.startsWith("video/")
         const mediaType = isVideo ? "video_url" : "image_url"
+
+        console.log(`[v0] Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
         const containerResponse = await fetch(
           `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`,
@@ -1114,16 +1247,15 @@ export default function DashboardPage() {
 
         if (!containerResponse.ok) {
           const errorData = await containerResponse.json()
+          console.log(`[v0] Instagram carousel item creation failed:`, errorData)
           throw new Error(errorData.error?.message || "Failed to create carousel item")
         }
 
         const containerResult = await containerResponse.json()
         mediaIds.push(containerResult.id)
 
-        if (isVideo) {
-          console.log(`[v0] Waiting for carousel video processing: ${containerResult.id}`)
-          await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
-        }
+        console.log(`[v0] Waiting for carousel item processing: ${containerResult.id}`)
+        await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
       }
 
       // Create carousel container
@@ -1166,15 +1298,17 @@ export default function DashboardPage() {
       // Instagram Reel
       console.log(`[v0] Creating Instagram reel with video: ${fileUrls[0]}`)
 
+      const containerPayload: any = {
+        media_type: "REELS",
+        video_url: fileUrls[0],
+        caption: postContent,
+        access_token: (selectedInstagramAccount as any).access_token,
+      }
+
       const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          media_type: "REELS",
-          video_url: fileUrls[0],
-          caption: postContent,
-          access_token: (selectedInstagramAccount as any).access_token,
-        }),
+        body: JSON.stringify(containerPayload),
       })
 
       if (!containerResponse.ok) {
@@ -1212,31 +1346,39 @@ export default function DashboardPage() {
       console.log(`[v0] Instagram reel published successfully`)
     } else {
       // Regular Instagram post
-      const isVideo = selectedFiles[0]?.type.startsWith("video/")
+      const isVideo = fileTypes[0]?.startsWith("video/")
       const mediaType = isVideo ? "video_url" : "image_url"
+
+      console.log(`[v0] Creating Instagram post: ${mediaType} = ${fileUrls[0]}`)
+      console.log(`[v0] File type detected: ${fileTypes[0]}`)
+
+      const containerPayload: any = {
+        [mediaType]: fileUrls[0],
+        caption: postContent,
+        access_token: (selectedInstagramAccount as any).access_token,
+      }
+
+      console.log(`[v0] Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
 
       const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          [mediaType]: fileUrls[0],
-          caption: postContent,
-          access_token: (selectedInstagramAccount as any).access_token,
-        }),
+        body: JSON.stringify(containerPayload),
       })
 
       if (!containerResponse.ok) {
         const errorData = await containerResponse.json()
+        console.log(`[v0] Instagram media container creation failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to create Instagram media container")
       }
 
       const containerResult = await containerResponse.json()
+      console.log(`[v0] Instagram container created:`, containerResult)
 
-      if (isVideo) {
-        console.log(`[v0] Waiting for video processing: ${containerResult.id}`)
-        await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
-      }
+      console.log(`[v0] Waiting for media processing: ${containerResult.id}`)
+      await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
 
+      console.log(`[v0] Publishing Instagram post: ${containerResult.id}`)
       const publishResponse = await fetch(
         `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media_publish`,
         {
@@ -1251,8 +1393,11 @@ export default function DashboardPage() {
 
       if (!publishResponse.ok) {
         const errorData = await publishResponse.json()
+        console.log(`[v0] Instagram publish failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to publish to Instagram")
       }
+
+      console.log(`[v0] Instagram post published successfully`)
     }
   }
 
@@ -1269,6 +1414,7 @@ export default function DashboardPage() {
 
     const validFiles: File[] = []
     const previews: string[] = []
+    const types: string[] = []
 
     files.forEach((file) => {
       if (file.size > 100 * 1024 * 1024) {
@@ -1294,6 +1440,7 @@ export default function DashboardPage() {
       }
 
       validFiles.push(file)
+      types.push(file.type)
 
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -1306,6 +1453,7 @@ export default function DashboardPage() {
     })
 
     setSelectedFiles(validFiles)
+    setFileTypes(types)
     setError("")
   }
 
@@ -1386,9 +1534,11 @@ export default function DashboardPage() {
 
     const validFiles: File[] = []
     const previews: string[] = []
+    const types: string[] = []
 
     fileArray.forEach((file) => {
       validFiles.push(file)
+      types.push(file.type)
 
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -1401,13 +1551,16 @@ export default function DashboardPage() {
     })
 
     setSelectedFiles(validFiles)
+    setFileTypes(types)
   }
 
   const removeFile = (index: number) => {
     const newFiles = selectedFiles.filter((_, i) => i !== index)
     const newPreviews = filePreviews.filter((_, i) => i !== index)
+    const newTypes = fileTypes.filter((_, i) => i !== index)
     setSelectedFiles(newFiles)
     setFilePreviews(newPreviews)
+    setFileTypes(newTypes)
   }
 
   const uploadImageToS3 = async (file: File): Promise<string> => {
@@ -1494,12 +1647,14 @@ export default function DashboardPage() {
       localStorage.setItem("facebook_access_token", facebookAccessToken)
       setIsFacebookTokenSet(true)
       fetchFacebookPages(facebookAccessToken)
+      setSelectedPlatforms((prev) => [...prev, "facebook"])
     }
 
     if (instagramAccessToken) {
       localStorage.setItem("instagram_access_token", instagramAccessToken)
       setIsInstagramTokenSet(true)
       fetchInstagramAccounts(instagramAccessToken)
+      setSelectedPlatforms((prev) => [...prev, "instagram"])
     }
 
     if (facebookAccessToken || instagramAccessToken) {
@@ -1534,6 +1689,7 @@ export default function DashboardPage() {
     setFacebookInsights(null)
     setDemographics(null)
     setPostAnalytics([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "facebook"))
     setShowTokenModal(true)
   }
 
@@ -1544,6 +1700,7 @@ export default function DashboardPage() {
     setIsFacebookTokenSet(false)
     setSelectedFacebookPage(null)
     setFacebookPages([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "facebook"))
     alert({
       title: "Facebook Disconnected",
       description: "Your Facebook account has been disconnected successfully.",
@@ -1557,6 +1714,7 @@ export default function DashboardPage() {
     setIsInstagramTokenSet(false)
     setSelectedInstagramAccount(null)
     setInstagramAccounts([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "instagram"))
     alert({
       title: "Instagram Disconnected",
       description: "Your Instagram account has been disconnected successfully.",
@@ -1646,6 +1804,176 @@ export default function DashboardPage() {
       }
     }
     return ""
+  }
+
+  const handleEmojiClick = (emojiData: any) => {
+    setPostContent((prev) => prev + emojiData.emoji)
+    setShowEmojiPicker(false)
+  }
+
+  const handleHashtagClick = (hashtag: string) => {
+    setPostContent((prev) => prev + " " + hashtag)
+    // setShowHashtagPicker(false)
+  }
+
+  // Popular hashtags for different categories
+  const popularHashtags = [
+    "#love",
+    "#instagood",
+    "#photooftheday",
+    "#fashion",
+    "#beautiful",
+    "#happy",
+    "#cute",
+    "#tbt",
+    "#like4like",
+    "#followme",
+    "#picoftheday",
+    "#follow",
+    "#me",
+    "#selfie",
+    "#summer",
+    "#art",
+    "#instadaily",
+    "#friends",
+    "#repost",
+    "#nature",
+    "#girl",
+    "#fun",
+    "#style",
+    "#smile",
+    "#food",
+    "#instalike",
+    "#family",
+    "#travel",
+    "#fitness",
+    "#igers",
+    "#tagsforlikes",
+    "#follow4follow",
+    "#nofilter",
+    "#life",
+    "#beauty",
+    "#amazing",
+    "#instamood",
+    "#sun",
+    "#followforfollow",
+    "#bestoftheday",
+    "#business",
+    "#entrepreneur",
+    "#success",
+    "#motivation",
+    "#marketing",
+    "#startup",
+    "#innovation",
+    "#leadership",
+    "#growth",
+    "#strategy",
+  ]
+
+  const searchPeopleForMention = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setMentionSuggestions([])
+      return
+    }
+
+    setIsSearchingMentions(true)
+    try {
+      const token = selectedFacebookPage?.access_token || facebookAccessToken
+      if (!token) {
+        return
+      }
+
+      // Search for Facebook friends/pages
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/me/friends?access_token=${token}&fields=id,name&limit=10`,
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        const filtered = (data.data || []).filter((friend: any) =>
+          friend.name.toLowerCase().includes(query.toLowerCase()),
+        )
+        setMentionSuggestions(filtered)
+      }
+    } catch (err) {
+      console.error("Mention search error:", err)
+    } finally {
+      setIsSearchingMentions(false)
+    }
+  }
+
+  const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart
+
+    setPostContent(value)
+    setMentionCursorPosition(cursorPos)
+
+    // Detect @ symbol and extract search query
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
+
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+      // Check if there's a space after @ (which would end the mention)
+      if (!textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
+        setMentionSearchQuery(textAfterAt)
+        setShowMentionDropdown(true)
+        searchPeopleForMention(textAfterAt)
+      } else {
+        setShowMentionDropdown(false)
+      }
+    } else {
+      setShowMentionDropdown(false)
+    }
+  }
+
+  const handleSelectMention = (person: { id: string; name: string }) => {
+    if (!textareaRef.current) return
+
+    const cursorPos = mentionCursorPosition
+    const textBeforeCursor = postContent.substring(0, cursorPos)
+    const textAfterCursor = postContent.substring(cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@")
+
+    if (lastAtIndex !== -1) {
+      const newText = postContent.substring(0, lastAtIndex) + `@${person.name} ` + textAfterCursor
+
+      setPostContent(newText)
+
+      // Store the mapping of name to ID
+      const newMap = new Map(taggedPeopleMap)
+      newMap.set(person.name, person.id)
+      setTaggedPeopleMap(newMap)
+
+      setShowMentionDropdown(false)
+      setMentionSearchQuery("")
+
+      // Focus back on textarea
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newCursorPos = lastAtIndex + person.name.length + 2 // +2 for @ and space
+          textareaRef.current.focus()
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
+        }
+      }, 0)
+    }
+  }
+
+  const extractTaggedPeople = (): string[] => {
+    const mentionRegex = /@(\w+(?:\s+\w+)*)/g
+    const matches = postContent.matchAll(mentionRegex)
+    const taggedIds: string[] = []
+
+    for (const match of matches) {
+      const name = match[1]
+      const id = taggedPeopleMap.get(name)
+      if (id) {
+        taggedIds.push(id)
+      }
+    }
+
+    return taggedIds
   }
 
   return (
@@ -1782,7 +2110,8 @@ export default function DashboardPage() {
           </div>
 
           {error && (
-            <Alert>
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -1969,10 +2298,8 @@ export default function DashboardPage() {
                 </TabsContent>
 
                 <TabsContent value="instagram">
-                  {
-                    selectedInstagramAccount &&
+                  {selectedInstagramAccount && (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-sm">Username</CardTitle>
@@ -1980,10 +2307,9 @@ export default function DashboardPage() {
                         <CardContent>
                           <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
                         </CardContent>
-
                       </Card>
                     </div>
-                  }
+                  )}
                   {selectedInstagramAccount && (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
@@ -2280,7 +2606,7 @@ export default function DashboardPage() {
             <DialogDescription>Choose which accounts to use for posting and analytics.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {facebookPages.length > 0 && (
+            {instagramAccounts.length > 0 && (
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Instagram className="h-4 w-4 text-pink-600" />
@@ -2401,7 +2727,6 @@ export default function DashboardPage() {
                   <Checkbox
                     id="instagram"
                     checked={postToInstagram}
-
                     // @ts-ignore
                     onCheckedChange={setPostToInstagram}
                     disabled={!selectedInstagramAccount}
@@ -2416,19 +2741,118 @@ export default function DashboardPage() {
 
             <div className="space-y-2">
               <Label htmlFor="post-content">{postType === "reel" ? "Video Description" : "Post Content"}</Label>
-              <Textarea
-                id="post-content"
-                placeholder={
-                  postType === "reel"
-                    ? "Describe your reel..."
-                    : postType === "carousel"
-                      ? "Caption for your carousel..."
-                      : "What's on your mind?"
-                }
-                value={postContent}
-                onChange={(e) => setPostContent(e.target.value)}
-                rows={4}
-              />
+              <div className="relative">
+                <Textarea
+                  ref={textareaRef}
+                  id="post-content"
+                  placeholder={
+                    postType === "reel"
+                      ? "Describe your reel... (Type @ to mention people)"
+                      : postType === "carousel"
+                        ? "Caption for your carousel... (Type @ to mention people)"
+                        : "What's on your mind? (Type @ to mention people)"
+                  }
+                  value={postContent}
+                  onChange={handleCaptionChange}
+                  className="min-h-[120px] pr-20"
+                />
+
+                {showMentionDropdown && (
+                  <div className="absolute z-50 mt-1 w-64 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {isSearchingMentions ? (
+                      <div className="p-2 text-sm text-muted-foreground">Searching...</div>
+                    ) : mentionSuggestions.length > 0 ? (
+                      mentionSuggestions.map((person) => (
+                        <button
+                          key={person.id}
+                          className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex items-center gap-2"
+                          onClick={() => handleSelectMention(person)}
+                        >
+                          <Users className="h-4 w-4" />
+                          {person.name}
+                        </button>
+                      ))
+                    ) : mentionSearchQuery.length >= 2 ? (
+                      <div className="p-2 text-sm text-muted-foreground">No people found</div>
+                    ) : null}
+                  </div>
+                )}
+
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowEmojiPicker(!showEmojiPicker)
+                        setShowHashtagPicker(false)
+                      }}
+                    >
+                      <Smile className="h-4 w-4" />
+                    </Button>
+                    {showEmojiPicker && (
+                      <div className="absolute top-8 right-0 z-50">
+                        <EmojiPicker onEmojiClick={handleEmojiClick} width={300} height={400} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowHashtagPicker(!showHashtagPicker)
+                        setShowEmojiPicker(false)
+                      }}
+                    >
+                      <Hash className="h-4 w-4" />
+                    </Button>
+                    {showHashtagPicker && (
+                      <div className="absolute top-8 right-0 z-50 w-80 max-h-60 bg-white border rounded-lg shadow-lg overflow-hidden">
+                        <ScrollArea className="h-full">
+                          <div className="p-3">
+                            <h4 className="font-medium mb-2">Popular Hashtags</h4>
+                            <div className="flex flex-wrap gap-1">
+                              {popularHashtags.map((hashtag) => (
+                                <Button
+                                  key={hashtag}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 text-xs bg-transparent"
+                                  onClick={() => handleHashtagClick(hashtag)}
+                                >
+                                  {hashtag}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between text-sm text-muted-foreground mt-1">
+                <span>
+                  {postContent.length}/{selectedPlatforms.includes("instagram") ? "2,200" : "63,206"} characters
+                </span>
+                <span className="text-xs">
+                  {selectedPlatforms.includes("instagram") && postContent.length > 2200 && (
+                    <span className="text-red-500">Instagram limit exceeded</span>
+                  )}
+                  {selectedPlatforms.includes("facebook") && postContent.length > 63206 && (
+                    <span className="text-red-500">Facebook limit exceeded</span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Add to your post</Label>
+              <div className="flex items-center space-x-2 flex-wrap"></div>
             </div>
 
             <div className="space-y-2">
@@ -2455,6 +2879,7 @@ export default function DashboardPage() {
                     onClick={() => {
                       setSelectedFiles([])
                       setFilePreviews([])
+                      setFileTypes([]) // Clear file types as well
                     }}
                   >
                     <X className="h-4 w-4" />
@@ -2493,7 +2918,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {postType === "post" && (
+            {postToFacebook && !postToInstagram && (
               <>
                 <div className="flex items-center space-x-2">
                   {/* @ts-ignore */}
@@ -2524,6 +2949,12 @@ export default function DashboardPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {postToInstagram && isScheduled && (
+              <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
+                Instagram does not support scheduled posts. Uncheck Instagram to schedule to Facebook only.
+              </div>
             )}
 
             <div className="flex justify-end space-x-2">
