@@ -844,9 +844,9 @@ export default function DashboardPage() {
 
       // Facebook reel validations
       if (postType === "reel") {
-        if (selectedFiles.length !== 1) {
-          return "Facebook reels require exactly one video file"
-        }
+        // if (selectedFiles.length !== 1) {
+        //   return "Facebook reels require exactly one video file"
+        // }
         const file = selectedFiles[0]
         if (!file.type.startsWith("video/")) {
           return "Facebook reels must be video files"
