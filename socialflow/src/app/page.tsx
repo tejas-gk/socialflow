@@ -506,10 +506,10 @@ export default function DashboardPage() {
       // Define the metrics you want
       const metrics = "reach,follower_count,profile_views,website_clicks"
 
-      // First call for metrics that don’t need metric_type
+      // First call for metrics that don't need metric_type
       const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`
 
-      // Metrics that don’t need metric_type
+      // Metrics that don't need metric_type
       const normalMetrics = "reach,follower_count"
 
       // Metrics that need metric_type=total_value
@@ -844,12 +844,21 @@ export default function DashboardPage() {
 
       // Facebook reel validations
       if (postType === "reel") {
-        // if (selectedFiles.length !== 1) {
-        //   return "Facebook reels require exactly one video file"
-        // }
+        if (selectedFiles.length !== 1) {
+          return "Facebook reels require exactly one video file"
+        }
         const file = selectedFiles[0]
         if (!file.type.startsWith("video/")) {
           return "Facebook reels must be video files"
+        }
+        // Additional Facebook video format validation
+        const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi"]
+        if (!supportedVideoTypes.includes(file.type)) {
+          return "Facebook supports MP4, MOV, and AVI video formats for reels"
+        }
+        // File size validation for Facebook videos
+        if (file.size > 4000 * 1024 * 1024) {
+          return "Video file must be smaller than 4GB for Facebook"
         }
       }
 
@@ -895,7 +904,7 @@ export default function DashboardPage() {
     }
 
     // File size validations
-    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024)
+    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024*1024)
     if (oversizedFiles.length > 0) {
       return "All files must be smaller than 100MB"
     }
@@ -936,21 +945,27 @@ export default function DashboardPage() {
 
       // Upload files to S3 if selected
       if (selectedFiles.length > 0) {
+        console.log("[v0] Uploading files to S3...")
         fileUrls = await uploadFilesToS3(selectedFiles)
+        console.log("[v0] Files uploaded to S3:", fileUrls)
       }
 
       const results = []
 
       // Post to Facebook if selected
       if (postToFacebook && selectedFacebookPage) {
+        console.log("[v0] Posting to Facebook...")
         await postToFacebookPage(fileUrls)
         results.push("Facebook")
+        console.log("[v0] Facebook post completed")
       }
 
       // Post to Instagram if selected
       if (postToInstagram && selectedInstagramAccount) {
+        console.log("[v0] Posting to Instagram...")
         await postToInstagramAccount(fileUrls)
         results.push("Instagram")
+        console.log("[v0] Instagram post completed")
       }
 
       // Reset form
@@ -966,17 +981,20 @@ export default function DashboardPage() {
       setTaggedPeopleMap(new Map())
       setFileTypes([]) // Reset file types
 
-      // Refresh posts
-      if (postToFacebook && selectedFacebookPage) {
-        fetchFacebookPagePosts(selectedFacebookPage)
-      }
-      if (postToInstagram && selectedInstagramAccount) {
-        fetchInstagramPosts(selectedInstagramAccount)
-      }
+      // Refresh posts with delay to allow for processing
+      setTimeout(() => {
+        if (postToFacebook && selectedFacebookPage) {
+          fetchFacebookPagePosts(selectedFacebookPage)
+        }
+        if (postToInstagram && selectedInstagramAccount) {
+          fetchInstagramPosts(selectedInstagramAccount)
+        }
+      }, 3000)
 
       alert(`Successfully posted to: ${results.join(", ")}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to post")
+      console.error("[v0] Posting error:", err)
+      setError(err instanceof Error ? err.message : "Failed to post. Please check your file and try again.")
     } finally {
       setIsPosting(false)
     }
@@ -987,201 +1005,233 @@ export default function DashboardPage() {
 
     const taggedIds = extractTaggedPeople()
 
-    // ✅ Handle carousel posts (multiple images)
-    if (postType === "carousel" && fileUrls.length > 1) {
-      const attachedMedia = []
+    try {
+      // ✅ Handle carousel posts (multiple images)
+      if (postType === "carousel" && fileUrls.length > 1) {
+        const attachedMedia = []
 
-      for (const url of fileUrls) {
-        // ✅ Upload each image via FormData so Facebook can read it
-        const formData = new FormData()
-        formData.append("access_token", selectedFacebookPage!.access_token)
-        formData.append("published", "false")
-
-        // Try fetching image binary (from S3 or Supabase)
-        const fileResponse = await fetch(url)
-        const blob = await fileResponse.blob()
-        formData.append("source", blob)
-
-        const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/photos`, {
-          method: "POST",
-          body: formData,
-        })
-
-        if (!photoResponse.ok) {
-          const errData = await photoResponse.json()
-          console.error("❌ Carousel image upload failed:", errData)
-          throw new Error(errData.error?.message || "Failed to upload image for carousel")
-        }
-
-        const photoResult = await photoResponse.json()
-        attachedMedia.push({ media_fbid: photoResult.id })
-      }
-
-      // ✅ Create carousel post
-      const postData: any = {
-        message: postContent,
-        attached_media: attachedMedia,
-        access_token: selectedFacebookPage!.access_token,
-      }
-
-      if (taggedIds.length > 0) {
-        postData.tags = taggedIds.join(",")
-      }
-
-      if (isScheduled && scheduledDate && scheduledTime) {
-        const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-        postData.scheduled_publish_time = Math.floor(scheduledDateTime.getTime() / 1000)
-        postData.published = false
-      }
-
-      const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/feed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData),
-      })
-
-      if (!response.ok) {
-        const errData = await response.json()
-        console.error("❌ Carousel post failed:", errData)
-        throw new Error(errData.error?.message || "Failed to post carousel to Facebook")
-      }
-
-      return
-    }
-
-    if (fileUrls.length > 0) {
-      const isVideo = fileTypes[0]?.startsWith("video/")
-
-      if (isVideo) {
-        // Phase 1: Start upload session
-        const startFormData = new FormData()
-        startFormData.append("access_token", selectedFacebookPage!.access_token)
-        startFormData.append("upload_phase", "start")
-
-        const fileResponse = await fetch(fileUrls[0])
-        const blob = await fileResponse.blob()
-        const fileSizeInBytes = blob.size
-
-        startFormData.append("file_size", fileSizeInBytes.toString())
-
-        const startResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
-          method: "POST",
-          body: startFormData,
-        })
-
-        if (!startResponse.ok) {
-          const errData = await startResponse.json()
-          console.error("❌ Video upload start phase failed:", errData)
-          throw new Error(errData.error?.message || "Failed to start video upload")
-        }
-
-        const startResult = await startResponse.json()
-        const uploadSessionId = startResult.upload_session_id
-
-        // Phase 2: Transfer video data
-        const transferFormData = new FormData()
-        transferFormData.append("access_token", selectedFacebookPage!.access_token)
-        transferFormData.append("upload_phase", "transfer")
-        transferFormData.append("upload_session_id", uploadSessionId)
-        transferFormData.append("start_offset", "0")
-        transferFormData.append("video_file_chunk", blob)
-
-        const transferResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
-          method: "POST",
-          body: transferFormData,
-        })
-
-        if (!transferResponse.ok) {
-          const errData = await transferResponse.json()
-          console.error("❌ Video upload transfer phase failed:", errData)
-          throw new Error(errData.error?.message || "Failed to transfer video")
-        }
-
-        // Phase 3: Finish upload and publish
-        const finishFormData = new FormData()
-        finishFormData.append("access_token", selectedFacebookPage!.access_token)
-        finishFormData.append("upload_phase", "finish")
-        finishFormData.append("upload_session_id", uploadSessionId)
-        finishFormData.append("description", postContent)
-
-        if (taggedIds.length > 0) {
-          finishFormData.append("tags", taggedIds.join(","))
-        }
-
-        if (isScheduled && scheduledDate && scheduledTime) {
-          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-          finishFormData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
-          finishFormData.append("published", "false")
-        }
-
-        const finishResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/videos`, {
-          method: "POST",
-          body: finishFormData,
-        })
-
-        if (!finishResponse.ok) {
-          const errData = await finishResponse.json()
-          console.error("❌ Video upload finish phase failed:", errData)
-          throw new Error(errData.error?.message || "Failed to finish video upload")
-        }
-      } else {
-        const formData = new FormData()
-        formData.append("caption", postContent)
-        formData.append("access_token", selectedFacebookPage!.access_token)
-
-        const fileResponse = await fetch(fileUrls[0])
-        const blob = await fileResponse.blob()
-        formData.append("source", blob)
-
-        if (taggedIds.length > 0) {
-          formData.append("tags", taggedIds.join(","))
-        }
-
-        if (isScheduled && scheduledDate && scheduledTime) {
-          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-          formData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
+        for (const url of fileUrls) {
+          // ✅ Upload each image via FormData so Facebook can read it
+          const formData = new FormData()
+          formData.append("access_token", selectedFacebookPage.access_token)
           formData.append("published", "false")
+
+          // Try fetching image binary (from S3 or Supabase)
+          const fileResponse = await fetch(url)
+          const blob = await fileResponse.blob()
+          formData.append("source", blob)
+
+          const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!photoResponse.ok) {
+            const errData = await photoResponse.json()
+            console.error("❌ Carousel image upload failed:", errData)
+            throw new Error(errData.error?.message || "Failed to upload image for carousel")
+          }
+
+          const photoResult = await photoResponse.json()
+          attachedMedia.push({ media_fbid: photoResult.id })
         }
 
-        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/photos`, {
+        // ✅ Create carousel post
+        const postData: any = {
+          message: postContent,
+          attached_media: attachedMedia,
+          access_token: selectedFacebookPage.access_token,
+        }
+
+        if (taggedIds.length > 0) {
+          postData.tags = taggedIds.join(",")
+        }
+
+        if (isScheduled && scheduledDate && scheduledTime) {
+          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          postData.scheduled_publish_time = Math.floor(scheduledDateTime.getTime() / 1000)
+          postData.published = false
+        }
+
+        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/feed`, {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postData),
         })
 
         if (!response.ok) {
           const errData = await response.json()
-          console.error("❌ Photo post failed:", errData)
-          throw new Error(errData.error?.message || "Failed to upload photo to Facebook")
+          console.error("❌ Carousel post failed:", errData)
+          throw new Error(errData.error?.message || "Failed to post carousel to Facebook")
+        }
+
+        return
+      }
+
+      if (fileUrls.length > 0) {
+        const isVideo = fileTypes[0]?.startsWith("video/")
+
+        if (isVideo) {
+          console.log("[v0] Starting Facebook video upload process...")
+
+          // Phase 1: Start upload session
+          const startFormData = new FormData()
+          startFormData.append("access_token", selectedFacebookPage.access_token)
+          startFormData.append("upload_phase", "start")
+
+          // Fetch the video file from S3 URL
+          const fileResponse = await fetch(fileUrls[0])
+          if (!fileResponse.ok) {
+            throw new Error("Failed to fetch video file from storage")
+          }
+
+          const blob = await fileResponse.blob()
+          const fileSizeInBytes = blob.size
+
+          startFormData.append("file_size", fileSizeInBytes.toString())
+
+          console.log("[v0] Starting video upload session...")
+          const startResponse = await fetch(
+            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
+            {
+              method: "POST",
+              body: startFormData,
+            }
+          )
+
+          if (!startResponse.ok) {
+            const errData = await startResponse.json()
+            console.error("❌ Video upload start phase failed:", errData)
+            throw new Error(errData.error?.message || "Failed to start video upload")
+          }
+
+          const startResult = await startResponse.json()
+          const uploadSessionId = startResult.upload_session_id
+          console.log("[v0] Upload session started:", uploadSessionId)
+
+          // Phase 2: Transfer video data
+          const transferFormData = new FormData()
+          transferFormData.append("access_token", selectedFacebookPage.access_token)
+          transferFormData.append("upload_phase", "transfer")
+          transferFormData.append("upload_session_id", uploadSessionId)
+          transferFormData.append("start_offset", "0")
+          transferFormData.append("video_file_chunk", blob)
+
+          console.log("[v0] Transferring video data...")
+          const transferResponse = await fetch(
+            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
+            {
+              method: "POST",
+              body: transferFormData,
+            }
+          )
+
+          if (!transferResponse.ok) {
+            const errData = await transferResponse.json()
+            console.error("❌ Video upload transfer phase failed:", errData)
+            throw new Error(errData.error?.message || "Failed to transfer video")
+          }
+
+          console.log("[v0] Video data transferred successfully")
+
+          // Phase 3: Finish upload and publish
+          const finishFormData = new FormData()
+          finishFormData.append("access_token", selectedFacebookPage.access_token)
+          finishFormData.append("upload_phase", "finish")
+          finishFormData.append("upload_session_id", uploadSessionId)
+          finishFormData.append("description", postContent)
+
+          if (taggedIds.length > 0) {
+            finishFormData.append("tags", taggedIds.join(","))
+          }
+
+          if (isScheduled && scheduledDate && scheduledTime) {
+            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+            finishFormData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
+            finishFormData.append("published", "false")
+          }
+
+          console.log("[v0] Finalizing video upload...")
+          const finishResponse = await fetch(
+            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
+            {
+              method: "POST",
+              body: finishFormData,
+            }
+          )
+
+          if (!finishResponse.ok) {
+            const errData = await finishResponse.json()
+            console.error("❌ Video upload finish phase failed:", errData)
+            throw new Error(errData.error?.message || "Failed to finish video upload")
+          }
+
+          const finishResult = await finishResponse.json()
+          console.log("[v0] Facebook video upload completed:", finishResult)
+
+        } else {
+          // Handle image upload
+          const formData = new FormData()
+          formData.append("caption", postContent)
+          formData.append("access_token", selectedFacebookPage.access_token)
+
+          const fileResponse = await fetch(fileUrls[0])
+          const blob = await fileResponse.blob()
+          formData.append("source", blob)
+
+          if (taggedIds.length > 0) {
+            formData.append("tags", taggedIds.join(","))
+          }
+
+          if (isScheduled && scheduledDate && scheduledTime) {
+            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+            formData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
+            formData.append("published", "false")
+          }
+
+          const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!response.ok) {
+            const errData = await response.json()
+            console.error("❌ Photo post failed:", errData)
+            throw new Error(errData.error?.message || "Failed to upload photo to Facebook")
+          }
+        }
+      } else {
+        // Text-only post
+        const postData: any = {
+          message: postContent,
+          access_token: selectedFacebookPage.access_token,
+        }
+
+        if (taggedIds.length > 0) {
+          postData.tags = taggedIds.join(",")
+        }
+
+        if (isScheduled && scheduledDate && scheduledTime) {
+          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          postData["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000)
+          postData["published"] = false
+        }
+
+        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/feed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postData),
+        })
+
+        if (!response.ok) {
+          const errData = await response.json()
+          console.error("❌ Text post failed:", errData)
+          throw new Error(errData.error?.message || "Failed to post text to Facebook")
         }
       }
-    } else {
-      // Text-only post
-      const postData: any = {
-        message: postContent,
-        access_token: selectedFacebookPage!.access_token,
-      }
-
-      if (taggedIds.length > 0) {
-        postData.tags = taggedIds.join(",")
-      }
-
-      if (isScheduled && scheduledDate && scheduledTime) {
-        const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-        postData["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000)
-        postData["published"] = false
-      }
-
-      const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage!.id}/feed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postData),
-      })
-
-      if (!response.ok) {
-        const errData = await response.json()
-        console.error("❌ Text post failed:", errData)
-        throw new Error(errData.error?.message || "Failed to post text to Facebook")
-      }
+    } catch (error) {
+      console.error("❌ Facebook post failed:", error)
+      throw error
     }
   }
 
@@ -1233,7 +1283,7 @@ export default function DashboardPage() {
         console.log(`[v0] Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
         const containerResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`,
+          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1259,7 +1309,7 @@ export default function DashboardPage() {
       }
 
       // Create carousel container
-      const carouselResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`, {
+      const carouselResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1279,7 +1329,7 @@ export default function DashboardPage() {
 
       // Publish carousel
       const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media_publish`,
+        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1305,7 +1355,7 @@ export default function DashboardPage() {
         access_token: (selectedInstagramAccount as any).access_token,
       }
 
-      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`, {
+      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(containerPayload),
@@ -1326,7 +1376,7 @@ export default function DashboardPage() {
       // Publish reel
       console.log(`[v0] Publishing Instagram reel: ${containerResult.id}`)
       const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media_publish`,
+        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1360,7 +1410,7 @@ export default function DashboardPage() {
 
       console.log(`[v0] Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
 
-      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media`, {
+      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(containerPayload),
@@ -1380,7 +1430,7 @@ export default function DashboardPage() {
 
       console.log(`[v0] Publishing Instagram post: ${containerResult.id}`)
       const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount!.id}/media_publish`,
+        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1405,7 +1455,9 @@ export default function DashboardPage() {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
-    // Validate file types based on post type
+    // Reset previous errors
+    setError("")
+
     const maxFiles = postType === "carousel" ? 10 : 1
     if (files.length > maxFiles) {
       setError(`Maximum ${maxFiles} files allowed for ${postType}`)
@@ -1416,15 +1468,26 @@ export default function DashboardPage() {
     const previews: string[] = []
     const types: string[] = []
 
-    files.forEach((file) => {
-      if (file.size > 100 * 1024 * 1024) {
-        setError("File size must be less than 100MB")
-        return
-      }
+    // Validate each file
+    for (const file of files) {
+      console.log("[v0] Processing file:", file.name, "Type:", file.type, "Size:", file.size)
 
+      // // File size validation
+      // if (file.size > 100 * 1024 * 1024) {
+      //   setError(`File "${file.name}" is too large. Maximum size is 100MB`)
+      //   return
+      // }
+
+      // Type validation based on post type
       if (postType === "reel") {
         if (!file.type.startsWith("video/")) {
-          setError("Reels require video files")
+          setError("Reels require video files only")
+          return
+        }
+        // Specific video format check
+        const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi"]
+        if (!supportedVideoTypes.includes(file.type)) {
+          setError("Please use MP4, MOV, or AVI video formats for reels")
           return
         }
       } else if (postType === "carousel") {
@@ -1442,6 +1505,7 @@ export default function DashboardPage() {
       validFiles.push(file)
       types.push(file.type)
 
+      // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
         previews.push(e.target?.result as string)
@@ -1450,108 +1514,12 @@ export default function DashboardPage() {
         }
       }
       reader.readAsDataURL(file)
-    })
+    }
 
     setSelectedFiles(validFiles)
     setFileTypes(types)
-    setError("")
-  }
-
-  const handleFileSelect2 = (files: FileList | null) => {
-    if (!files || files.length === 0) return
-
-    setError("")
-
-    // Convert FileList to Array
-    const fileArray = Array.from(files)
-
-    // Platform-specific file validation
-    const validateFiles = (): string | null => {
-      // Check file count limits based on post type
-      const maxFiles = postType === "carousel" ? 10 : 1
-      if (fileArray.length > maxFiles) {
-        return `Maximum ${maxFiles} file${maxFiles > 1 ? "s" : ""} allowed for ${postType} posts`
-      }
-
-      // Validate each file
-      for (const file of fileArray) {
-        // File size check
-        if (file.size > 100 * 1024 * 1024) {
-          return `File "${file.name}" is too large. Maximum size is 100MB`
-        }
-
-        // File type validation based on post type and platform
-        if (postType === "reel") {
-          if (!file.type.startsWith("video/")) {
-            return "Reels require video files only"
-          }
-          // Common video formats check
-          const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi", "video/quicktime"]
-          if (!supportedVideoTypes.includes(file.type)) {
-            return "Please use supported video formats: MP4, MOV, AVI"
-          }
-        } else if (postType === "carousel") {
-          if (postToFacebook && postToInstagram) {
-            // When posting to both, only images are supported in carousels
-            if (!file.type.startsWith("image/")) {
-              return "When posting carousels to both platforms, only images are supported"
-            }
-          } else if (postToFacebook) {
-            // Facebook carousels are image-only
-            if (!file.type.startsWith("image/")) {
-              return "Facebook carousel posts support images only"
-            }
-          } else if (postToInstagram) {
-            // Instagram carousels support both images and videos
-            if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-              return "Instagram carousel posts support images and videos only"
-            }
-          }
-        } else {
-          // Regular posts
-          if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-            return "Please select valid image or video files"
-          }
-        }
-
-        // Image format validation
-        if (file.type.startsWith("image/")) {
-          const supportedImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
-          if (!supportedImageTypes.includes(file.type)) {
-            return "Please use supported image formats: JPEG, PNG, GIF, WebP"
-          }
-        }
-      }
-
-      return null
-    }
-
-    const fileValidationError = validateFiles()
-    if (fileValidationError) {
-      setError(fileValidationError)
-      return
-    }
-
-    const validFiles: File[] = []
-    const previews: string[] = []
-    const types: string[] = []
-
-    fileArray.forEach((file) => {
-      validFiles.push(file)
-      types.push(file.type)
-
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        previews.push(e.target?.result as string)
-        if (previews.length === validFiles.length) {
-          setFilePreviews(previews)
-        }
-      }
-      reader.readAsDataURL(file)
-    })
-
-    setSelectedFiles(validFiles)
-    setFileTypes(types)
+    console.log("[v0] Files selected:", validFiles.map(f => f.name))
+    console.log("[v0] File types detected:", types)
   }
 
   const removeFile = (index: number) => {
@@ -1561,85 +1529,6 @@ export default function DashboardPage() {
     setSelectedFiles(newFiles)
     setFilePreviews(newPreviews)
     setFileTypes(newTypes)
-  }
-
-  const uploadImageToS3 = async (file: File): Promise<string> => {
-    try {
-      console.log("[v0] Starting S3 upload for file:", file.name, "Type:", file.type)
-
-      // Get signed URL from your API
-      const response = await fetch("/api/s3-upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileType: file.type,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.log("[v0] S3 upload API error:", errorText)
-        throw new Error("Failed to get upload URL")
-      }
-
-      const { uploadUrl, fileUrl } = await response.json()
-      console.log("[v0] Got upload URL:", uploadUrl)
-      console.log("[v0] File will be available at:", fileUrl)
-
-      if (!uploadUrl) {
-        throw new Error("No upload URL received from API")
-      }
-
-      // Upload file to S3
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type,
-        },
-      })
-
-      if (!uploadResponse.ok) {
-        console.log("[v0] S3 upload failed:", uploadResponse.status, uploadResponse.statusText)
-        throw new Error("Failed to upload image")
-      }
-
-      console.log("[v0] S3 upload successful, file URL:", fileUrl)
-      return fileUrl
-    } catch (error) {
-      console.error("[v0] Error uploading image:", error)
-      throw error
-    }
-  }
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setError("Image size must be less than 10MB")
-        return
-      }
-
-      if (!file.type.startsWith("image/")) {
-        setError("Please select a valid image file")
-        return
-      }
-
-      setSelectedImage(file)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const removeImage = () => {
-    setSelectedImage(null)
-    setImagePreview(null)
   }
 
   const handleTokenSubmit = () => {
@@ -1678,21 +1567,6 @@ export default function DashboardPage() {
     setShowPageModal(false)
   }
 
-  const handleDisconnect = () => {
-    localStorage.removeItem("facebook_access_token")
-    localStorage.removeItem("selected_facebook_page")
-    setFacebookAccessToken("")
-    setIsFacebookTokenSet(false)
-    setSelectedFacebookPage(null)
-    setFacebookPages([])
-    setFacebookPosts([])
-    setFacebookInsights(null)
-    setDemographics(null)
-    setPostAnalytics([])
-    setSelectedPlatforms((prev) => prev.filter((p) => p !== "facebook"))
-    setShowTokenModal(true)
-  }
-
   const disconnectFacebook = () => {
     localStorage.removeItem("facebook_access_token")
     localStorage.removeItem("selected_facebook_page")
@@ -1701,10 +1575,7 @@ export default function DashboardPage() {
     setSelectedFacebookPage(null)
     setFacebookPages([])
     setSelectedPlatforms((prev) => prev.filter((p) => p !== "facebook"))
-    alert({
-      title: "Facebook Disconnected",
-      description: "Your Facebook account has been disconnected successfully.",
-    })
+    alert("Facebook Disconnected")
   }
 
   const disconnectInstagram = () => {
@@ -1715,66 +1586,13 @@ export default function DashboardPage() {
     setSelectedInstagramAccount(null)
     setInstagramAccounts([])
     setSelectedPlatforms((prev) => prev.filter((p) => p !== "instagram"))
-    alert({
-      title: "Instagram Disconnected",
-      description: "Your Instagram account has been disconnected successfully.",
-    })
+    alert("Instagram Disconnected")
   }
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + "M"
     if (num >= 1000) return (num / 1000).toFixed(1) + "K"
     return num.toString()
-  }
-
-  const renderInstagramMedia = (post: any) => {
-    console.log("[v0] Instagram post media type:", post.media_type, "URL:", post.media_url)
-
-    if (post.media_type === "VIDEO") {
-      // For videos, use thumbnail_url if available, otherwise show video icon
-      if (post.thumbnail_url) {
-        return (
-          <Image
-            src={post.thumbnail_url || "/placeholder.svg"}
-            alt="Video thumbnail"
-            width={40}
-            height={40}
-            className="h-10 w-10 rounded-full object-cover"
-            onError={(e) => {
-              console.log("[v0] Video thumbnail failed to load:", post.thumbnail_url)
-              e.currentTarget.style.display = "none"
-            }}
-          />
-        )
-      } else {
-        return (
-          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-            <span className="text-xs">📹</span>
-          </div>
-        )
-      }
-    } else if ((post.media_type === "IMAGE" || post.media_type === "CAROUSEL_ALBUM") && post.media_url) {
-      return (
-        <Image
-          src={post.media_url || "/placeholder.svg"}
-          alt="Post thumbnail"
-          width={40}
-          height={40}
-          className="h-10 w-10 rounded-full object-cover"
-          onError={(e) => {
-            console.log("[v0] Image failed to load:", post.media_url)
-            e.currentTarget.style.display = "none"
-          }}
-        />
-      )
-    }
-
-    // Fallback for unknown media types
-    return (
-      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-        <span className="text-xs">📷</span>
-      </div>
-    )
   }
 
   const getPostTypeHelperText = () => {
@@ -1813,7 +1631,6 @@ export default function DashboardPage() {
 
   const handleHashtagClick = (hashtag: string) => {
     setPostContent((prev) => prev + " " + hashtag)
-    // setShowHashtagPicker(false)
   }
 
   // Popular hashtags for different categories
@@ -2118,10 +1935,10 @@ export default function DashboardPage() {
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
-              {/* <TabsTrigger value="overview">Overview</TabsTrigger> */}
+              <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="posts">Posts</TabsTrigger>
-              {/* <TabsTrigger value="demographics">Demographics</TabsTrigger> */}
+              <TabsTrigger value="demographics">Demographics</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -2200,65 +2017,6 @@ export default function DashboardPage() {
                 </TabsList>
 
                 <TabsContent value="facebook">
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Followers</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {(facebookInsights?.page_fans || 0) + (instagramInsights?.follower_count || 0)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Impressions</CardTitle>
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {(facebookInsights?.page_impressions || 0) + (instagramInsights?.impressions || 0)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Reach</CardTitle>
-                        <Target className="h-4 w-4 text-muted-foreground" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">
-                          {(facebookInsights?.page_engaged_users || 0) + (instagramInsights?.reach || 0)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          FB: {facebookInsights?.page_engaged_users || 0} | IG: {instagramInsights?.reach || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{facebookPosts.length + instagramPosts.length}</div>
-                        <p className="text-xs text-muted-foreground">
-                          FB: {facebookPosts.length} | IG: {instagramPosts.length}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
                   {facebookInsights && (
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
@@ -2308,10 +2066,6 @@ export default function DashboardPage() {
                           <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
                         </CardContent>
                       </Card>
-                    </div>
-                  )}
-                  {selectedInstagramAccount && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-sm">Followers</CardTitle>
@@ -2326,7 +2080,7 @@ export default function DashboardPage() {
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-sm">website clicks</CardTitle>
+                          <CardTitle className="text-sm">Website Clicks</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="text-2xl font-bold">{instagramInsights.website_clicks}</div>
@@ -2505,61 +2259,6 @@ export default function DashboardPage() {
               {!demographics && (
                 <div className="text-center py-12">
                   <p className="text-gray-500">No demographic data available. Connect Facebook to see demographics.</p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="performance" className="space-y-6">
-              {postAnalytics.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Post Performance Analytics</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {postAnalytics.map((analytics, index) => {
-                        const post = facebookPosts.find((p) => p.id === analytics.post_id)
-                        return (
-                          <div key={analytics.post_id} className="border rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="font-medium text-sm">Post #{index + 1}</h4>
-                              <span className="text-xs text-gray-500">
-                                {post ? new Date(post.created_time).toLocaleDateString() : ""}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                              {post?.message || post?.story || "No caption"}
-                            </p>
-                            <div className="grid grid-cols-4 gap-4 text-center">
-                              <div>
-                                <div className="text-lg font-bold">{analytics.impressions}</div>
-                                <div className="text-xs text-gray-500">Impressions</div>
-                              </div>
-                              <div>
-                                <div className="text-lg font-bold">{analytics.reach}</div>
-                                <div className="text-xs text-gray-500">Reach</div>
-                              </div>
-                              <div>
-                                <div className="text-lg font-bold">{analytics.engagement}</div>
-                                <div className="text-xs text-gray-500">Engagement</div>
-                              </div>
-                              <div>
-                                <div className="text-lg font-bold">{analytics.clicks}</div>
-                                <div className="text-xs text-gray-500">Clicks</div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              {postAnalytics.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">
-                    No post analytics available. Connect Facebook and wait for posts to load.
-                  </p>
                 </div>
               )}
             </TabsContent>
@@ -2851,11 +2550,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Add to your post</Label>
-              <div className="flex items-center space-x-2 flex-wrap"></div>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="media-upload">
                 {postType === "reel"
                   ? "Video (Required)"
@@ -2879,7 +2573,7 @@ export default function DashboardPage() {
                     onClick={() => {
                       setSelectedFiles([])
                       setFilePreviews([])
-                      setFileTypes([]) // Clear file types as well
+                      setFileTypes([])
                     }}
                   >
                     <X className="h-4 w-4" />
