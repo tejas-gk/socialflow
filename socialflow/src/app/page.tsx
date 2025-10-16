@@ -43,6 +43,15 @@ import {
 import EmojiPicker from "emoji-picker-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+function makeLocalDateFromInputs(dateStr: string, timeStr: string) {
+  // dateStr expected "YYYY-MM-DD" from <input type="date">
+  // timeStr expected "HH:mm" or "HH:mm:ss" from <input type="time">
+  if (!dateStr || !timeStr) return new Date(Number.NaN)
+  const [y, m, d] = dateStr.split("-").map((v) => Number.parseInt(v, 10))
+  const [hh, mm, ss] = timeStr.split(":").map((v) => Number.parseInt(v, 10))
+  return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, ss || 0, 0)
+}
+
 interface FacebookPage {
   id: string
   name: string
@@ -904,25 +913,38 @@ export default function DashboardPage() {
     }
 
     // File size validations
-    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024*1024)
+    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024)
     if (oversizedFiles.length > 0) {
       return "All files must be smaller than 100MB"
     }
 
     // Scheduling validations
-    if (scheduledDate) {
-      const now = new Date()
-      const scheduled = new Date(scheduledDate)
+    if (isScheduled) {
+      if (!scheduledDate || !scheduledTime) {
+        return "Please select both a date and time to schedule the post"
+      }
 
-      if (scheduled <= now) {
+      // Use robust local constructor instead of Date(`${date}T${time}`)
+      const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
+      if (Number.isNaN(scheduledDateTime.getTime())) {
+        return "Invalid schedule date/time"
+      }
+
+      const now = new Date()
+      if (scheduledDateTime <= now) {
         return "Scheduled time must be in the future"
+      }
+
+      // Facebook requires at least 10 minutes lead time
+      const minLeadMs = 10 * 60 * 1000
+      if (scheduledDateTime.getTime() < now.getTime() + minLeadMs) {
+        return "Facebook scheduling requires at least 10 minutes lead time"
       }
 
       // Facebook allows scheduling up to 6 months in advance
       const sixMonthsFromNow = new Date()
       sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6)
-
-      if (scheduled > sixMonthsFromNow) {
+      if (scheduledDateTime > sixMonthsFromNow) {
         return "Posts cannot be scheduled more than 6 months in advance"
       }
     }
@@ -1005,21 +1027,34 @@ export default function DashboardPage() {
 
     const taggedIds = extractTaggedPeople()
 
-    try {
-      // ✅ Handle carousel posts (multiple images)
-      if (postType === "carousel" && fileUrls.length > 1) {
-        const attachedMedia = []
+    // Pre-check: enforce FB 10-minute scheduling rule
+    if (isScheduled && scheduledDate && scheduledTime) {
+      const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
+      const nowSec = Math.floor(Date.now() / 1000)
+      const scheduledSec = Math.floor(scheduledDateTime.getTime() / 1000)
+      if (scheduledSec < nowSec + 600) {
+        throw new Error("Facebook scheduling requires at least 10 minutes lead time.")
+      }
+    }
 
-        for (const url of fileUrls) {
-          // ✅ Upload each image via FormData so Facebook can read it
+    try {
+      // ✅ Handle carousel posts (multiple images) - unchanged path, but use robust date constructor
+      if (postType === "carousel" && fileUrls.length > 1) {
+        const attachedMedia: Array<{ media_fbid: string }> = []
+
+        for (let i = 0; i < fileUrls.length; i++) {
+          const url = fileUrls[i]
           const formData = new FormData()
           formData.append("access_token", selectedFacebookPage.access_token)
           formData.append("published", "false")
 
-          // Try fetching image binary (from S3 or Supabase)
           const fileResponse = await fetch(url)
           const blob = await fileResponse.blob()
-          formData.append("source", blob)
+
+          const extFromType = (fileTypes?.[i] || "image/jpeg").split("/").pop() || "jpg"
+          const filename = `photo-${Date.now()}-${i}.${extFromType}`
+          const file = new File([blob], filename, { type: blob.type || "image/jpeg" })
+          formData.append("source", file)
 
           const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
             method: "POST",
@@ -1027,28 +1062,28 @@ export default function DashboardPage() {
           })
 
           if (!photoResponse.ok) {
-            const errData = await photoResponse.json()
+            let errData: any
+            try {
+              errData = await photoResponse.json()
+            } catch {
+              errData = { raw: await photoResponse.text() }
+            } // Changed response.text() to photoResponse.text()
             console.error("❌ Carousel image upload failed:", errData)
-            throw new Error(errData.error?.message || "Failed to upload image for carousel")
+            throw new Error(errData?.error?.message || "Failed to upload image for carousel")
           }
 
           const photoResult = await photoResponse.json()
           attachedMedia.push({ media_fbid: photoResult.id })
         }
 
-        // ✅ Create carousel post
         const postData: any = {
           message: postContent,
           attached_media: attachedMedia,
           access_token: selectedFacebookPage.access_token,
         }
 
-        if (taggedIds.length > 0) {
-          postData.tags = taggedIds.join(",")
-        }
-
         if (isScheduled && scheduledDate && scheduledTime) {
-          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
           postData.scheduled_publish_time = Math.floor(scheduledDateTime.getTime() / 1000)
           postData.published = false
         }
@@ -1060,11 +1095,15 @@ export default function DashboardPage() {
         })
 
         if (!response.ok) {
-          const errData = await response.json()
+          let errData: any
+          try {
+            errData = await response.json()
+          } catch {
+            errData = { raw: await response.text() }
+          }
           console.error("❌ Carousel post failed:", errData)
-          throw new Error(errData.error?.message || "Failed to post carousel to Facebook")
+          throw new Error(errData?.error?.message || "Failed to post carousel to Facebook")
         }
-
         return
       }
 
@@ -1091,13 +1130,10 @@ export default function DashboardPage() {
           startFormData.append("file_size", fileSizeInBytes.toString())
 
           console.log("[v0] Starting video upload session...")
-          const startResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              body: startFormData,
-            }
-          )
+          const startResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`, {
+            method: "POST",
+            body: startFormData,
+          })
 
           if (!startResponse.ok) {
             const errData = await startResponse.json()
@@ -1118,13 +1154,10 @@ export default function DashboardPage() {
           transferFormData.append("video_file_chunk", blob)
 
           console.log("[v0] Transferring video data...")
-          const transferResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              body: transferFormData,
-            }
-          )
+          const transferResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`, {
+            method: "POST",
+            body: transferFormData,
+          })
 
           if (!transferResponse.ok) {
             const errData = await transferResponse.json()
@@ -1146,19 +1179,16 @@ export default function DashboardPage() {
           }
 
           if (isScheduled && scheduledDate && scheduledTime) {
-            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+            const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
             finishFormData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
             finishFormData.append("published", "false")
           }
 
           console.log("[v0] Finalizing video upload...")
-          const finishResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              body: finishFormData,
-            }
-          )
+          const finishResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`, {
+            method: "POST",
+            body: finishFormData,
+          })
 
           if (!finishResponse.ok) {
             const errData = await finishResponse.json()
@@ -1168,36 +1198,83 @@ export default function DashboardPage() {
 
           const finishResult = await finishResponse.json()
           console.log("[v0] Facebook video upload completed:", finishResult)
-
         } else {
-          // Handle image upload
-          const formData = new FormData()
-          formData.append("caption", postContent)
-          formData.append("access_token", selectedFacebookPage.access_token)
-
+          // Image path (single image)
           const fileResponse = await fetch(fileUrls[0])
           const blob = await fileResponse.blob()
-          formData.append("source", blob)
-
-          if (taggedIds.length > 0) {
-            formData.append("tags", taggedIds.join(","))
-          }
+          const extFromType = (fileTypes?.[0] || "image/jpeg").split("/").pop() || "jpg"
+          const filename = `photo-${Date.now()}.${extFromType}`
+          const file = new File([blob], filename, { type: blob.type || "image/jpeg" })
 
           if (isScheduled && scheduledDate && scheduledTime) {
-            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-            formData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
-            formData.append("published", "false")
-          }
+            const uploadForm = new FormData()
+            uploadForm.append("access_token", selectedFacebookPage.access_token)
+            uploadForm.append("published", "false")
+            uploadForm.append("source", file)
 
-          const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
-            method: "POST",
-            body: formData,
-          })
+            const uploadRes = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+              method: "POST",
+              body: uploadForm,
+            })
+            if (!uploadRes.ok) {
+              let errData: any
+              try {
+                errData = await uploadRes.json()
+              } catch {
+                errData = { raw: await uploadRes.text() }
+              } // Changed response.text() to uploadRes.text()
+              console.error("❌ Unpublished photo upload failed:", errData)
+              throw new Error(errData?.error?.message || "Failed to upload photo for scheduling")
+            }
+            const uploadJson = await uploadRes.json()
+            const mediaId = uploadJson.id
 
-          if (!response.ok) {
-            const errData = await response.json()
-            console.error("❌ Photo post failed:", errData)
-            throw new Error(errData.error?.message || "Failed to upload photo to Facebook")
+            const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
+            const feedBody = {
+              message: postContent,
+              attached_media: [{ media_fbid: mediaId }],
+              access_token: selectedFacebookPage.access_token,
+              published: false,
+              scheduled_publish_time: Math.floor(scheduledDateTime.getTime() / 1000),
+            }
+
+            const scheduleRes = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/feed`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(feedBody),
+            })
+            if (!scheduleRes.ok) {
+              let errData: any
+              try {
+                errData = await scheduleRes.json()
+              } catch {
+                errData = { raw: await scheduleRes.text() }
+              } // Changed response.text() to scheduleRes.text()
+              console.error("❌ Scheduled photo post failed:", errData)
+              throw new Error(errData?.error?.message || "Failed to schedule photo to Facebook")
+            }
+          } else {
+            // Immediate publish via /photos
+            const formData = new FormData()
+            formData.append("message", postContent || "")
+            formData.append("access_token", selectedFacebookPage.access_token)
+            formData.append("source", file)
+
+            const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+              method: "POST",
+              body: formData,
+            })
+
+            if (!response.ok) {
+              let errData: any
+              try {
+                errData = await response.json()
+              } catch {
+                errData = { raw: await response.text() }
+              }
+              console.error("❌ Photo post failed:", errData)
+              throw new Error(errData?.error?.message || "Failed to upload photo to Facebook")
+            }
           }
         }
       } else {
@@ -1207,12 +1284,8 @@ export default function DashboardPage() {
           access_token: selectedFacebookPage.access_token,
         }
 
-        if (taggedIds.length > 0) {
-          postData.tags = taggedIds.join(",")
-        }
-
         if (isScheduled && scheduledDate && scheduledTime) {
-          const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+          const scheduledDateTime = makeLocalDateFromInputs(scheduledDate, scheduledTime)
           postData["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000)
           postData["published"] = false
         }
@@ -1224,14 +1297,19 @@ export default function DashboardPage() {
         })
 
         if (!response.ok) {
-          const errData = await response.json()
+          let errData: any
+          try {
+            errData = await response.json()
+          } catch {
+            errData = { raw: await response.text() }
+          }
           console.error("❌ Text post failed:", errData)
-          throw new Error(errData.error?.message || "Failed to post text to Facebook")
+          throw new Error(errData?.error?.message || "Failed to post text to Facebook")
         }
       }
-    } catch (error) {
-      console.error("❌ Facebook post failed:", error)
-      throw error
+    } catch (e) {
+      console.error("❌ Facebook post failed:", e)
+      throw e
     }
   }
 
@@ -1282,18 +1360,15 @@ export default function DashboardPage() {
 
         console.log(`[v0] Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
-        const containerResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              [mediaType]: url,
-              is_carousel_item: true,
-              access_token: (selectedInstagramAccount as any).access_token,
-            }),
-          },
-        )
+        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            [mediaType]: url,
+            is_carousel_item: true,
+            access_token: (selectedInstagramAccount as any).access_token,
+          }),
+        })
 
         if (!containerResponse.ok) {
           const errorData = await containerResponse.json()
@@ -1518,7 +1593,10 @@ export default function DashboardPage() {
 
     setSelectedFiles(validFiles)
     setFileTypes(types)
-    console.log("[v0] Files selected:", validFiles.map(f => f.name))
+    console.log(
+      "[v0] Files selected:",
+      validFiles.map((f) => f.name),
+    )
     console.log("[v0] File types detected:", types)
   }
 
@@ -2163,12 +2241,23 @@ export default function DashboardPage() {
                       {instagramPosts.map((post) => (
                         <Card key={post.id}>
                           <CardContent className="p-4">
-                            {(post.media_url || post.thumbnail_url) && (
+                            {post.media_type === "VIDEO" && post.media_url ? (
+                              <video
+                                src={post.media_url}
+                                poster={post.thumbnail_url}
+                                controls
+                                preload="metadata"
+                                className="w-full h-48 object-cover rounded-lg mb-3"
+                                aria-label="Instagram video"
+                              />
+                            ) : post.media_url || post.thumbnail_url ? (
                               <img
                                 src={post.media_url || post.thumbnail_url}
                                 alt="Post"
                                 className="w-full h-48 object-cover rounded-lg mb-3"
                               />
+                            ) : (
+                              <div className="w-full h-48 rounded-lg mb-3 bg-muted" />
                             )}
                             <p className="text-sm text-gray-600 mb-2">{post.caption || "No caption"}</p>
                             <div className="flex justify-between text-xs text-gray-500">
@@ -2587,7 +2676,12 @@ export default function DashboardPage() {
                     {filePreviews.map((preview, index) => (
                       <div key={index} className="relative">
                         {selectedFiles[index]?.type.startsWith("video/") ? (
-                          <video src={preview} className="h-24 w-full object-cover rounded border" controls />
+                          <video
+                            src={preview}
+                            className="h-24 w-full object-cover rounded border"
+                            controls
+                            preload="metadata"
+                          />
                         ) : (
                           <Image
                             src={preview || "/placeholder.svg"}
@@ -2629,6 +2723,9 @@ export default function DashboardPage() {
                         type="date"
                         value={scheduledDate}
                         onChange={(e) => setScheduledDate(e.target.value)}
+                        // In your date/time <Input> props, you can add:
+                        //   min={new Date().toISOString().slice(0,10)} for date
+                        //   and for time, compute a dynamic min if scheduledDate === today. Left as a non-breaking improvement comment.
                       />
                     </div>
                     <div className="space-y-2">
