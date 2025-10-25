@@ -904,10 +904,10 @@ export default function DashboardPage() {
     }
 
     // File size validations
-    // const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024*1024)
-    // if (oversizedFiles.length > 0) {
-    //   return "All files must be smaller than 100MB"
-    // }
+    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024*1024)
+    if (oversizedFiles.length > 0) {
+      return "All files must be smaller than 100MB"
+    }
 
     // Scheduling validations
     if (scheduledDate) {
