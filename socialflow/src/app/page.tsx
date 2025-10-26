@@ -710,7 +710,7 @@ export default function DashboardPage() {
   const uploadFilesToS3 = async (files: File[]): Promise<string[]> => {
     const uploadPromises = files.map(async (file) => {
       try {
-        console.log("[v0] Starting S3 upload for file:", file.name, "Type:", file.type)
+        console.log(" Starting S3 upload for file:", file.name, "Type:", file.type)
 
         const response = await fetch("/api/s3-upload", {
           method: "POST",
@@ -725,12 +725,12 @@ export default function DashboardPage() {
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.log("[v0] S3 upload API error:", errorText)
+          console.log(" S3 upload API error:", errorText)
           throw new Error("Failed to get upload URL")
         }
 
         const { uploadUrl, fileUrl } = await response.json()
-        console.log("[v0] Got upload URL:", uploadUrl)
+        console.log(" Got upload URL:", uploadUrl)
 
         if (!uploadUrl) {
           throw new Error("No upload URL received from API")
@@ -750,7 +750,7 @@ export default function DashboardPage() {
 
         return fileUrl
       } catch (error) {
-        console.error("[v0] Error uploading file:", error)
+        console.error(" Error uploading file:", error)
         throw error
       }
     })
@@ -945,27 +945,27 @@ export default function DashboardPage() {
 
       // Upload files to S3 if selected
       if (selectedFiles.length > 0) {
-        console.log("[v0] Uploading files to S3...")
+        console.log(" Uploading files to S3...")
         fileUrls = await uploadFilesToS3(selectedFiles)
-        console.log("[v0] Files uploaded to S3:", fileUrls)
+        console.log(" Files uploaded to S3:", fileUrls)
       }
 
       const results = []
 
       // Post to Facebook if selected
       if (postToFacebook && selectedFacebookPage) {
-        console.log("[v0] Posting to Facebook...")
+        console.log(" Posting to Facebook...")
         await postToFacebookPage(fileUrls)
         results.push("Facebook")
-        console.log("[v0] Facebook post completed")
+        console.log(" Facebook post completed")
       }
 
       // Post to Instagram if selected
       if (postToInstagram && selectedInstagramAccount) {
-        console.log("[v0] Posting to Instagram...")
+        console.log(" Posting to Instagram...")
         await postToInstagramAccount(fileUrls)
         results.push("Instagram")
-        console.log("[v0] Instagram post completed")
+        console.log(" Instagram post completed")
       }
 
       // Reset form
@@ -993,7 +993,7 @@ export default function DashboardPage() {
 
       alert(`Successfully posted to: ${results.join(", ")}`)
     } catch (err) {
-      console.error("[v0] Posting error:", err)
+      console.error(" Posting error:", err)
       setError(err instanceof Error ? err.message : "Failed to post. Please check your file and try again.")
     } finally {
       setIsPosting(false)
@@ -1072,104 +1072,36 @@ export default function DashboardPage() {
         const isVideo = fileTypes[0]?.startsWith("video/")
 
         if (isVideo) {
-          console.log("[v0] Starting Facebook video upload process...")
+          const videoUrl = fileUrls[0];
+          const pageAccessToken = selectedFacebookPage.access_token;
 
-          // Phase 1: Start upload session
-          const startFormData = new FormData()
-          startFormData.append("access_token", selectedFacebookPage.access_token)
-          startFormData.append("upload_phase", "start")
-
-          // Fetch the video file from S3 URL
-          const fileResponse = await fetch(fileUrls[0])
-          if (!fileResponse.ok) {
-            throw new Error("Failed to fetch video file from storage")
-          }
-
-          const blob = await fileResponse.blob()
-          const fileSizeInBytes = blob.size
-
-          startFormData.append("file_size", fileSizeInBytes.toString())
-
-          console.log("[v0] Starting video upload session...")
-          const startResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              body: startFormData,
-            }
-          )
-
-          if (!startResponse.ok) {
-            const errData = await startResponse.json()
-            console.error("❌ Video upload start phase failed:", errData)
-            throw new Error(errData.error?.message || "Failed to start video upload")
-          }
-
-          const startResult = await startResponse.json()
-          const uploadSessionId = startResult.upload_session_id
-          console.log("[v0] Upload session started:", uploadSessionId)
-
-          // Phase 2: Transfer video data
-          const transferFormData = new FormData()
-          transferFormData.append("access_token", selectedFacebookPage.access_token)
-          transferFormData.append("upload_phase", "transfer")
-          transferFormData.append("upload_session_id", uploadSessionId)
-          transferFormData.append("start_offset", "0")
-          transferFormData.append("video_file_chunk", blob)
-
-          console.log("[v0] Transferring video data...")
-          const transferResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              body: transferFormData,
-            }
-          )
-
-          if (!transferResponse.ok) {
-            const errData = await transferResponse.json()
-            console.error("❌ Video upload transfer phase failed:", errData)
-            throw new Error(errData.error?.message || "Failed to transfer video")
-          }
-
-          console.log("[v0] Video data transferred successfully")
-
-          // Phase 3: Finish upload and publish
-          const finishFormData = new FormData()
-          finishFormData.append("access_token", selectedFacebookPage.access_token)
-          finishFormData.append("upload_phase", "finish")
-          finishFormData.append("upload_session_id", uploadSessionId)
-          finishFormData.append("description", postContent)
-
-          if (taggedIds.length > 0) {
-            finishFormData.append("tags", taggedIds.join(","))
-          }
+          const payload = {
+            file_url: videoUrl,
+            title: "My Product Launch Video",
+            description: postContent,
+            published: !isScheduled,
+            access_token: pageAccessToken,
+          };
 
           if (isScheduled && scheduledDate && scheduledTime) {
-            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
-            finishFormData.append("scheduled_publish_time", Math.floor(scheduledDateTime.getTime() / 1000).toString())
-            finishFormData.append("published", "false")
+            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+            payload["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000);
           }
 
-          console.log("[v0] Finalizing video upload...")
-          const finishResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/videos`,
+          const response = await fetch(
+            `https://graph-video.facebook.com/v23.0/${selectedFacebookPage.id}/videos`,
             {
               method: "POST",
-              body: finishFormData,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
             }
-          )
+          );
 
-          if (!finishResponse.ok) {
-            const errData = await finishResponse.json()
-            console.error("❌ Video upload finish phase failed:", errData)
-            throw new Error(errData.error?.message || "Failed to finish video upload")
-          }
-
-          const finishResult = await finishResponse.json()
-          console.log("[v0] Facebook video upload completed:", finishResult)
-
-        } else {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error?.message || "Failed to upload video");
+          console.log("✅ Facebook video uploaded:", data);
+        }
+else {
           // Handle image upload
           const formData = new FormData()
           formData.append("caption", postContent)
@@ -1235,7 +1167,7 @@ export default function DashboardPage() {
     }
   }
 
-  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 30): Promise<boolean> => {
+  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 20): Promise<boolean> => {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const response = await fetch(
@@ -1243,13 +1175,13 @@ export default function DashboardPage() {
         )
 
         if (!response.ok) {
-          console.log(`[v0] Media status check failed, attempt ${attempt + 1}`)
+          console.log(` Media status check failed, attempt ${attempt + 1}`)
           await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait 2 seconds
           continue
         }
 
         const result = await response.json()
-        console.log(`[v0] Media status check attempt ${attempt + 1}:`, result)
+        console.log(` Media status check attempt ${attempt + 1}:`, result)
 
         if (result.status_code === "FINISHED") {
           return true
@@ -1260,7 +1192,7 @@ export default function DashboardPage() {
         // Wait 2 seconds before next attempt
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
-        console.log(`[v0] Error checking media status, attempt ${attempt + 1}:`, error)
+        console.log(` Error checking media status, attempt ${attempt + 1}:`, error)
         await new Promise((resolve) => setTimeout(resolve, 2000))
       }
     }
@@ -1280,7 +1212,7 @@ export default function DashboardPage() {
         const isVideo = fileTypes[i]?.startsWith("video/")
         const mediaType = isVideo ? "video_url" : "image_url"
 
-        console.log(`[v0] Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
+        console.log(` Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
         const containerResponse = await fetch(
           `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`,
@@ -1297,14 +1229,14 @@ export default function DashboardPage() {
 
         if (!containerResponse.ok) {
           const errorData = await containerResponse.json()
-          console.log(`[v0] Instagram carousel item creation failed:`, errorData)
+          console.log(` Instagram carousel item creation failed:`, errorData)
           throw new Error(errorData.error?.message || "Failed to create carousel item")
         }
 
         const containerResult = await containerResponse.json()
         mediaIds.push(containerResult.id)
 
-        console.log(`[v0] Waiting for carousel item processing: ${containerResult.id}`)
+        console.log(` Waiting for carousel item processing: ${containerResult.id}`)
         await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
       }
 
@@ -1346,7 +1278,7 @@ export default function DashboardPage() {
       }
     } else if (postType === "reel" && fileUrls.length > 0) {
       // Instagram Reel
-      console.log(`[v0] Creating Instagram reel with video: ${fileUrls[0]}`)
+      console.log(` Creating Instagram reel with video: ${fileUrls[0]}`)
 
       const containerPayload: any = {
         media_type: "REELS",
@@ -1363,18 +1295,18 @@ export default function DashboardPage() {
 
       if (!containerResponse.ok) {
         const errorData = await containerResponse.json()
-        console.log(`[v0] Instagram reel container creation failed:`, errorData)
+        console.log(` Instagram reel container creation failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to create Instagram reel")
       }
 
       const containerResult = await containerResponse.json()
-      console.log(`[v0] Instagram reel container created:`, containerResult)
+      console.log(` Instagram reel container created:`, containerResult)
 
-      console.log(`[v0] Waiting for reel video processing: ${containerResult.id}`)
+      console.log(` Waiting for reel video processing: ${containerResult.id}`)
       await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
 
       // Publish reel
-      console.log(`[v0] Publishing Instagram reel: ${containerResult.id}`)
+      console.log(` Publishing Instagram reel: ${containerResult.id}`)
       const publishResponse = await fetch(
         `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
         {
@@ -1389,18 +1321,18 @@ export default function DashboardPage() {
 
       if (!publishResponse.ok) {
         const errorData = await publishResponse.json()
-        console.log(`[v0] Instagram reel publish failed:`, errorData)
+        console.log(` Instagram reel publish failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to publish reel to Instagram")
       }
 
-      console.log(`[v0] Instagram reel published successfully`)
+      console.log(` Instagram reel published successfully`)
     } else {
       // Regular Instagram post
       const isVideo = fileTypes[0]?.startsWith("video/")
       const mediaType = isVideo ? "video_url" : "image_url"
 
-      console.log(`[v0] Creating Instagram post: ${mediaType} = ${fileUrls[0]}`)
-      console.log(`[v0] File type detected: ${fileTypes[0]}`)
+      console.log(` Creating Instagram post: ${mediaType} = ${fileUrls[0]}`)
+      console.log(` File type detected: ${fileTypes[0]}`)
 
       const containerPayload: any = {
         [mediaType]: fileUrls[0],
@@ -1408,7 +1340,7 @@ export default function DashboardPage() {
         access_token: (selectedInstagramAccount as any).access_token,
       }
 
-      console.log(`[v0] Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
+      console.log(` Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
 
       const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
         method: "POST",
@@ -1418,17 +1350,17 @@ export default function DashboardPage() {
 
       if (!containerResponse.ok) {
         const errorData = await containerResponse.json()
-        console.log(`[v0] Instagram media container creation failed:`, errorData)
+        console.log(` Instagram media container creation failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to create Instagram media container")
       }
 
       const containerResult = await containerResponse.json()
-      console.log(`[v0] Instagram container created:`, containerResult)
+      console.log(` Instagram container created:`, containerResult)
 
-      console.log(`[v0] Waiting for media processing: ${containerResult.id}`)
+      console.log(` Waiting for media processing: ${containerResult.id}`)
       await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
 
-      console.log(`[v0] Publishing Instagram post: ${containerResult.id}`)
+      console.log(` Publishing Instagram post: ${containerResult.id}`)
       const publishResponse = await fetch(
         `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
         {
@@ -1443,11 +1375,11 @@ export default function DashboardPage() {
 
       if (!publishResponse.ok) {
         const errorData = await publishResponse.json()
-        console.log(`[v0] Instagram publish failed:`, errorData)
+        console.log(` Instagram publish failed:`, errorData)
         throw new Error(errorData.error?.message || "Failed to publish to Instagram")
       }
 
-      console.log(`[v0] Instagram post published successfully`)
+      console.log(` Instagram post published successfully`)
     }
   }
 
@@ -1470,7 +1402,7 @@ export default function DashboardPage() {
 
     // Validate each file
     for (const file of files) {
-      console.log("[v0] Processing file:", file.name, "Type:", file.type, "Size:", file.size)
+      console.log(" Processing file:", file.name, "Type:", file.type, "Size:", file.size)
 
       // // File size validation
       // if (file.size > 100 * 1024 * 1024) {
@@ -1518,8 +1450,8 @@ export default function DashboardPage() {
 
     setSelectedFiles(validFiles)
     setFileTypes(types)
-    console.log("[v0] Files selected:", validFiles.map(f => f.name))
-    console.log("[v0] File types detected:", types)
+    console.log(" Files selected:", validFiles.map(f => f.name))
+    console.log(" File types detected:", types)
   }
 
   const removeFile = (index: number) => {
