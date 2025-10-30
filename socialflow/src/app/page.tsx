@@ -1833,6 +1833,14 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 )}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPageModal(true)}
+                  title="Select Pages"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Select Pages
+                </Button>
               </div>
               <Button onClick={() => setShowPostModal(true)} disabled={!isFacebookTokenSet && !isInstagramTokenSet}>
                 <Plus className="h-4 w-4 mr-2" />
