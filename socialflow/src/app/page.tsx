@@ -191,6 +191,7 @@ export default function DashboardPage() {
     const savedFacebookPage = localStorage.getItem("selected_facebook_page")
     const savedInstagramAccount = localStorage.getItem("selected_instagram_account")
 
+    // setShowPageModal(true)
     if (savedFacebookToken) {
       setFacebookAccessToken(savedFacebookToken)
       setIsFacebookTokenSet(true)
@@ -222,6 +223,7 @@ export default function DashboardPage() {
   }, [])
 
   const initiateOAuth = (platform: "facebook" | "instagram") => {
+    console.log("TSM")
     const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
     if (!clientId) {
       setError("Facebook App ID not configured")
@@ -254,18 +256,19 @@ export default function DashboardPage() {
             setIsFacebookTokenSet(true)
             fetchFacebookPages(savedToken)
             setSelectedPlatforms((prev) => [...prev, "facebook"])
-          // } else {
+          } else {
             setInstagramAccessToken(savedToken)
             setIsInstagramTokenSet(true)
             fetchInstagramAccounts(savedToken)
             setSelectedPlatforms((prev) => [...prev, "instagram"])
           }
           setShowTokenModal(false)
+          setShowPageModal(true)
+          window.location.reload()
         }
       }
     }, 1000)
 
-    window.location.reload()
   }
 
   const fetchFacebookPages = async (token: string) => {
