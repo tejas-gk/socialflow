@@ -2466,10 +2466,8 @@ export default function DashboardPage() {
               <Button variant="outline" onClick={() => setShowPostModal(false)}>
                 Cancel
               </Button>
-              <Button onClick={handlePost} disabled={isPosting}>
-                {isPosting ? (
-                  "Posting..."
-                ) : isScheduled ? (
+              <Button onClick={handlePost}>
+             {isScheduled ? (
                   <>
                     <Calendar className="h-4 w-4 mr-2" />
                     Schedule {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : "Post"}
