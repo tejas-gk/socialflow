@@ -254,7 +254,7 @@ export default function DashboardPage() {
             setIsFacebookTokenSet(true)
             fetchFacebookPages(savedToken)
             setSelectedPlatforms((prev) => [...prev, "facebook"])
-          } else {
+          // } else {
             setInstagramAccessToken(savedToken)
             setIsInstagramTokenSet(true)
             fetchInstagramAccounts(savedToken)
@@ -264,6 +264,8 @@ export default function DashboardPage() {
         }
       }
     }, 1000)
+
+    window.location.reload()
   }
 
   const fetchFacebookPages = async (token: string) => {
@@ -2472,6 +2474,65 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+  <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Your Accounts</DialogTitle>
+            <DialogDescription>Choose which accounts to use for posting and analytics.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {facebookPages.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Instagram className="h-4 w-4 text-pink-600" />
+                  Instagram Accounts
+                </Label>
+                {instagramAccounts.map((account) => (
+                  <Button
+                    key={account.id}
+                    variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleInstagramSelection(account)}
+                  >
+                    {account.profile_picture_url && (
+                      <Image
+                        src={account.profile_picture_url || "/placeholder.svg"}
+                        alt={account.username}
+                        width={20}
+                        height={20}
+                        className="h-5 w-5 rounded-full mr-2"
+                      />
+                    )}
+                    @{account.username}
+                    {selectedInstagramAccount?.id === account.id && <span className="ml-auto text-green-600">✓</span>}
+                  </Button>
+                ))}
+              </div>
+            )}
+            {facebookPages.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Facebook className="h-4 w-4 text-blue-600" />
+                  Facebook Pages
+                </Label>
+                {facebookPages.map((page) => (
+                  <Button
+                    key={page.id}
+                    variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handlePageSelection(page)}
+                  >
+                    {page.name}
+                    {selectedFacebookPage?.id === page.id && <span className="ml-auto text-green-600">✓</span>}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
     </div>
   )
 }
