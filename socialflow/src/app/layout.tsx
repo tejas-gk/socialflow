@@ -2,8 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import { Montserrat, Open_Sans } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from '@clerk/nextjs'
-
+import { Toaster } from "@/components/ui/sonner"
 const montserrat = Montserrat({
   subsets: ["latin"],
   display: "swap",
@@ -33,7 +32,8 @@ export default function RootLayout({
     // <ClerkProvider>
       <html lang="en" className={`${montserrat.variable} ${openSans.variable} antialiased`}>
         <body className="font-sans" suppressHydrationWarning={true}>
-          {children}
+        {children}
+        <Toaster />
         </body>
       </html>
 

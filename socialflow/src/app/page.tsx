@@ -904,7 +904,7 @@ export default function DashboardPage() {
     }
 
     // File size validations
-    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024*1024)
+    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024 * 1024)
     if (oversizedFiles.length > 0) {
       return "All files must be smaller than 100MB"
     }
@@ -936,6 +936,8 @@ export default function DashboardPage() {
       setError(validationError)
       return
     }
+
+    setShowPostModal(false)
 
     setIsPosting(true)
     setError("")
@@ -975,7 +977,6 @@ export default function DashboardPage() {
       setScheduledDate("")
       setScheduledTime("")
       setIsScheduled(false)
-      setShowPostModal(false)
       setPostType("post")
       setSelectedPlatforms([])
       setTaggedPeopleMap(new Map())
@@ -1072,8 +1073,8 @@ export default function DashboardPage() {
         const isVideo = fileTypes[0]?.startsWith("video/")
 
         if (isVideo) {
-          const videoUrl = fileUrls[0];
-          const pageAccessToken = selectedFacebookPage.access_token;
+          const videoUrl = fileUrls[0]
+          const pageAccessToken = selectedFacebookPage.access_token
 
           const payload = {
             file_url: videoUrl,
@@ -1081,27 +1082,23 @@ export default function DashboardPage() {
             description: postContent,
             published: !isScheduled,
             access_token: pageAccessToken,
-          };
-
-          if (isScheduled && scheduledDate && scheduledTime) {
-            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
-            payload["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000);
           }
 
-          const response = await fetch(
-            `https://graph-video.facebook.com/v23.0/${selectedFacebookPage.id}/videos`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            }
-          );
+          if (isScheduled && scheduledDate && scheduledTime) {
+            const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+            payload["scheduled_publish_time"] = Math.floor(scheduledDateTime.getTime() / 1000)
+          }
 
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error?.message || "Failed to upload video");
-          console.log("✅ Facebook video uploaded:", data);
-        }
-else {
+          const response = await fetch(`https://graph-video.facebook.com/v23.0/${selectedFacebookPage.id}/videos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+
+          const data = await response.json()
+          if (!response.ok) throw new Error(data.error?.message || "Failed to upload video")
+          console.log("✅ Facebook video uploaded:", data)
+        } else {
           // Handle image upload
           const formData = new FormData()
           formData.append("caption", postContent)
@@ -1176,7 +1173,7 @@ else {
 
         if (!response.ok) {
           console.log(` Media status check failed, attempt ${attempt + 1}`)
-          await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait 2 seconds
+          await new Promise((resolve) => setTimeout(resolve, 5000)) // Wait 2 seconds
           continue
         }
 
@@ -1214,18 +1211,15 @@ else {
 
         console.log(` Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
-        const containerResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              [mediaType]: url,
-              is_carousel_item: true,
-              access_token: (selectedInstagramAccount as any).access_token,
-            }),
-          },
-        )
+        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            [mediaType]: url,
+            is_carousel_item: true,
+            access_token: (selectedInstagramAccount as any).access_token,
+          }),
+        })
 
         if (!containerResponse.ok) {
           const errorData = await containerResponse.json()
@@ -1450,7 +1444,10 @@ else {
 
     setSelectedFiles(validFiles)
     setFileTypes(types)
-    console.log(" Files selected:", validFiles.map(f => f.name))
+    console.log(
+      " Files selected:",
+      validFiles.map((f) => f.name),
+    )
     console.log(" File types detected:", types)
   }
 
@@ -1519,12 +1516,6 @@ else {
     setInstagramAccounts([])
     setSelectedPlatforms((prev) => prev.filter((p) => p !== "instagram"))
     alert("Instagram Disconnected")
-  }
-
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + "M"
-    if (num >= 1000) return (num / 1000).toFixed(1) + "K"
-    return num.toString()
   }
 
   const getPostTypeHelperText = () => {
@@ -1861,7 +1852,7 @@ else {
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error == "Media processing timeout - please try again" ? "Media processing timeout - but this doesnt mean not posted,once check" : error}</AlertDescription>
             </Alert>
           )}
 
@@ -1870,7 +1861,7 @@ else {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="posts">Posts</TabsTrigger>
-              <TabsTrigger value="demographics">Demographics</TabsTrigger>
+              {/* <TabsTrigger value="demographics">Demographics</TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -2127,73 +2118,6 @@ else {
                   )}
               </div>
             </TabsContent>
-
-            <TabsContent value="demographics" className="space-y-6">
-              {demographics && (
-                <div className="grid gap-6 md:grid-cols-2">
-                  {/* Age & Gender Distribution */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Age & Gender Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {demographics.age_gender.map((item: any) => (
-                          <div key={item.age} className="flex justify-between items-center">
-                            <span className="text-sm font-medium">{item.age}</span>
-                            <div className="flex gap-4 text-sm">
-                              <span className="text-blue-600">M: {item.male}</span>
-                              <span className="text-pink-600">F: {item.female}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Top Countries */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Top Countries</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {/* @ts-ignore */}
-                        {demographics.countries.map((item) => (
-                          <div key={item.country} className="flex justify-between items-center">
-                            <span className="text-sm font-medium">{item.country}</span>
-                            <span className="text-sm text-gray-600">{item.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Top Cities */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Top Cities</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {/* @ts-ignore */}
-                        {demographics.cities.map((item) => (
-                          <div key={item.city} className="flex justify-between items-center">
-                            <span className="text-sm font-medium">{item.city}</span>
-                            <span className="text-sm text-gray-600">{item.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              {!demographics && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">No demographic data available. Connect Facebook to see demographics.</p>
-                </div>
-              )}
-            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -2226,64 +2150,6 @@ else {
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">You can connect one or both platforms</div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Your Accounts</DialogTitle>
-            <DialogDescription>Choose which accounts to use for posting and analytics.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {instagramAccounts.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Instagram className="h-4 w-4 text-pink-600" />
-                  Instagram Accounts
-                </Label>
-                {instagramAccounts.map((account) => (
-                  <Button
-                    key={account.id}
-                    variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
-                    className="w-full justify-start"
-                    onClick={() => handleInstagramSelection(account)}
-                  >
-                    {account.profile_picture_url && (
-                      <Image
-                        src={account.profile_picture_url || "/placeholder.svg"}
-                        alt={account.username}
-                        width={20}
-                        height={20}
-                        className="h-5 w-5 rounded-full mr-2"
-                      />
-                    )}
-                    @{account.username}
-                    {selectedInstagramAccount?.id === account.id && <span className="ml-auto text-green-600">✓</span>}
-                  </Button>
-                ))}
-              </div>
-            )}
-            {facebookPages.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Facebook className="h-4 w-4 text-blue-600" />
-                  Facebook Pages
-                </Label>
-                {facebookPages.map((page) => (
-                  <Button
-                    key={page.id}
-                    variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
-                    className="w-full justify-start"
-                    onClick={() => handlePageSelection(page)}
-                  >
-                    {page.name}
-                    {selectedFacebookPage?.id === page.id && <span className="ml-auto text-green-600">✓</span>}
-                  </Button>
-                ))}
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
