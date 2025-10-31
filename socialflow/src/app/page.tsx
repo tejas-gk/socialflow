@@ -26,6 +26,10 @@ import {
   Smile,
   Hash,
   AlertCircle,
+  Loader2,
+  Upload,
+  CheckCircle,
+  Clock,
 } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -42,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import EmojiPicker from "emoji-picker-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Progress } from "@/components/ui/progress"
 
 interface FacebookPage {
   id: string
@@ -183,6 +188,35 @@ export default function DashboardPage() {
   const [mentionCursorPosition, setMentionCursorPosition] = useState(0)
   const [taggedPeopleMap, setTaggedPeopleMap] = useState<Map<string, string>>(new Map()) // name -> id mapping
 
+  // New states for posting status and upload progress
+  const [postingStatus, setPostingStatus] = useState<{
+    isPosting: boolean
+    message: string
+    progress: number
+    currentStep: string
+    estimatedTime?: string
+  }>({
+    isPosting: false,
+    message: "",
+    progress: 0,
+    currentStep: ""
+  })
+
+  const [uploadProgress, setUploadProgress] = useState<{
+    isUploading: boolean
+    progress: number
+    currentFile: string
+    totalFiles: number
+    currentFileIndex: number
+  }>({
+    isUploading: false,
+    progress: 0,
+    currentFile: "",
+    totalFiles: 0,
+    currentFileIndex: 0
+  })
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -191,7 +225,6 @@ export default function DashboardPage() {
     const savedFacebookPage = localStorage.getItem("selected_facebook_page")
     const savedInstagramAccount = localStorage.getItem("selected_instagram_account")
 
-    // setShowPageModal(true)
     if (savedFacebookToken) {
       setFacebookAccessToken(savedFacebookToken)
       setIsFacebookTokenSet(true)
@@ -268,7 +301,6 @@ export default function DashboardPage() {
         }
       }
     }, 1000)
-
   }
 
   const fetchFacebookPages = async (token: string) => {
@@ -652,7 +684,7 @@ export default function DashboardPage() {
               const [gender, age] = key.split(".")
               const existingAge = demographics.age_gender.find((item: any) => item.age === age)
               if (existingAge) {
-                existingAge[gender === "M" ? "male" : "female"] = value as number
+                existingAge[gender as "male" | "female"] = value as number
               } else {
                 demographics.age_gender.push({
                   age,
@@ -712,10 +744,30 @@ export default function DashboardPage() {
     }
   }, [selectedInstagramAccount, instagramPosts])
 
+  // Enhanced upload with timeout handling
   const uploadFilesToS3 = async (files: File[]): Promise<string[]> => {
-    const uploadPromises = files.map(async (file) => {
+    setUploadProgress({
+      isUploading: true,
+      progress: 0,
+      currentFile: "",
+      totalFiles: files.length,
+      currentFileIndex: 0
+    })
+
+    const uploadPromises = files.map(async (file, index) => {
       try {
         console.log(" Starting S3 upload for file:", file.name, "Type:", file.type)
+
+        setUploadProgress(prev => ({
+          ...prev,
+          currentFile: file.name,
+          currentFileIndex: index + 1,
+          progress: (index / files.length) * 100
+        }))
+
+        // Add timeout for S3 upload
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
 
         const response = await fetch("/api/s3-upload", {
           method: "POST",
@@ -726,7 +778,10 @@ export default function DashboardPage() {
             fileName: file.name,
             fileType: file.type,
           }),
+          signal: controller.signal
         })
+
+        clearTimeout(timeoutId)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -741,26 +796,51 @@ export default function DashboardPage() {
           throw new Error("No upload URL received from API")
         }
 
+        // Upload file with timeout
+        const uploadController = new AbortController()
+        const uploadTimeoutId = setTimeout(() => uploadController.abort(), 120000) // 2 minute timeout for large files
+
         const uploadResponse = await fetch(uploadUrl, {
           method: "PUT",
           body: file,
           headers: {
             "Content-Type": file.type,
           },
+          signal: uploadController.signal
         })
+
+        clearTimeout(uploadTimeoutId)
 
         if (!uploadResponse.ok) {
           throw new Error("Failed to upload file")
         }
 
+        setUploadProgress(prev => ({
+          ...prev,
+          progress: ((index + 1) / files.length) * 100
+        }))
+
         return fileUrl
       } catch (error) {
         console.error(" Error uploading file:", error)
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(`Upload timeout for ${file.name}. Please try again.`)
+        }
         throw error
       }
     })
 
-    return Promise.all(uploadPromises)
+    const results = await Promise.all(uploadPromises)
+
+    setUploadProgress({
+      isUploading: false,
+      progress: 100,
+      currentFile: "",
+      totalFiles: 0,
+      currentFileIndex: 0
+    })
+
+    return results
   }
 
   const validatePost = (): string | null => {
@@ -935,6 +1015,57 @@ export default function DashboardPage() {
     return null
   }
 
+  // Enhanced waitForMediaProcessing with better timeout handling
+  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 30): Promise<boolean> => {
+    const startTime = Date.now()
+    const maxWaitTime = 300000 // 5 minutes max for US regions
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Check if we've exceeded maximum wait time
+        if (Date.now() - startTime > maxWaitTime) {
+          throw new Error("Media processing timeout - please check your posts manually")
+        }
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout per request
+
+        const response = await fetch(
+          `https://graph.facebook.com/v18.0/${mediaId}?fields=status_code,status&access_token=${accessToken}`,
+          { signal: controller.signal }
+        )
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          console.log(` Media status check failed, attempt ${attempt + 1}`)
+          await new Promise((resolve) => setTimeout(resolve, 10000)) // Wait 10 seconds for US regions
+          continue
+        }
+
+        const result = await response.json()
+        console.log(` Media status check attempt ${attempt + 1}:`, result)
+
+        if (result.status_code === "FINISHED") {
+          return true
+        } else if (result.status_code === "ERROR" || result.status === "ERROR") {
+          throw new Error("Media processing failed - " + (result.status_message || "Unknown error"))
+        }
+
+        // Wait longer between checks for US regions (10 seconds)
+        await new Promise((resolve) => setTimeout(resolve, 10000))
+      } catch (error) {
+        console.log(` Error checking media status, attempt ${attempt + 1}:`, error)
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log(" Request timeout, continuing...")
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10000))
+      }
+    }
+
+    throw new Error("Media processing taking longer than expected - please check your posts manually")
+  }
+
   const handlePost = async () => {
     const validationError = validatePost()
     if (validationError) {
@@ -943,37 +1074,121 @@ export default function DashboardPage() {
     }
 
     setShowPostModal(false)
-
     setIsPosting(true)
     setError("")
+
+    // Calculate estimated time based on platforms and media
+    let estimatedTime = "1-2 minutes"
+    if (postToFacebook && postToInstagram) {
+      estimatedTime = "2-4 minutes"
+    }
+    if (selectedFiles.length > 0) {
+      estimatedTime += " (including media processing)"
+    }
+
+    // Set initial posting status
+    setPostingStatus({
+      isPosting: true,
+      message: "Starting post creation...",
+      progress: 5,
+      currentStep: "Initializing",
+      estimatedTime
+    })
 
     try {
       let fileUrls: string[] = []
 
       // Upload files to S3 if selected
       if (selectedFiles.length > 0) {
+        setPostingStatus({
+          isPosting: true,
+          message: "Uploading media files to cloud...",
+          progress: 10,
+          currentStep: "Uploading Media",
+          estimatedTime
+        })
+
         console.log(" Uploading files to S3...")
         fileUrls = await uploadFilesToS3(selectedFiles)
         console.log(" Files uploaded to S3:", fileUrls)
+
+        setPostingStatus({
+          isPosting: true,
+          message: "Media upload complete! Preparing social media posts...",
+          progress: 30,
+          currentStep: "Media Upload Complete",
+          estimatedTime
+        })
+      } else {
+        setPostingStatus({
+          isPosting: true,
+          message: "Preparing posts...",
+          progress: 20,
+          currentStep: "Preparing Posts",
+          estimatedTime
+        })
       }
 
       const results = []
+      let currentProgress = 40
 
       // Post to Facebook if selected
       if (postToFacebook && selectedFacebookPage) {
+        setPostingStatus({
+          isPosting: true,
+          message: "Posting to Facebook...",
+          progress: currentProgress,
+          currentStep: "Posting to Facebook",
+          estimatedTime
+        })
+
         console.log(" Posting to Facebook...")
         await postToFacebookPage(fileUrls)
         results.push("Facebook")
         console.log(" Facebook post completed")
+
+        currentProgress = postToInstagram ? 70 : 90
+        setPostingStatus({
+          isPosting: true,
+          message: "Facebook post complete!",
+          progress: currentProgress,
+          currentStep: "Facebook Complete",
+          estimatedTime
+        })
       }
 
       // Post to Instagram if selected
       if (postToInstagram && selectedInstagramAccount) {
+        setPostingStatus({
+          isPosting: true,
+          message: "Posting to Instagram...",
+          progress: currentProgress,
+          currentStep: "Posting to Instagram",
+          estimatedTime
+        })
+
         console.log(" Posting to Instagram...")
         await postToInstagramAccount(fileUrls)
         results.push("Instagram")
         console.log(" Instagram post completed")
+
+        setPostingStatus({
+          isPosting: true,
+          message: "Instagram post complete!",
+          progress: 95,
+          currentStep: "Instagram Complete",
+          estimatedTime
+        })
       }
+
+      // Final success status
+      setPostingStatus({
+        isPosting: true,
+        message: `Successfully posted to: ${results.join(", ")}!`,
+        progress: 100,
+        currentStep: "Complete",
+        estimatedTime: "Done!"
+      })
 
       // Reset form
       setPostContent("")
@@ -995,12 +1210,29 @@ export default function DashboardPage() {
         if (postToInstagram && selectedInstagramAccount) {
           fetchInstagramPosts(selectedInstagramAccount)
         }
+      }, 5000)
+
+      // Show success for 3 seconds before hiding
+      setTimeout(() => {
+        setPostingStatus({
+          isPosting: false,
+          message: "",
+          progress: 0,
+          currentStep: ""
+        })
       }, 3000)
 
-      alert(`Successfully posted to: ${results.join(", ")}`)
     } catch (err) {
       console.error(" Posting error:", err)
-      setError(err instanceof Error ? err.message : "Failed to post. Please check your file and try again.")
+      const errorMessage = err instanceof Error ? err.message : "Failed to post. Please check your file and try again."
+      setError(errorMessage)
+
+      setPostingStatus({
+        isPosting: false,
+        message: "Posting failed",
+        progress: 0,
+        currentStep: "Error"
+      })
     } finally {
       setIsPosting(false)
     }
@@ -1012,11 +1244,20 @@ export default function DashboardPage() {
     const taggedIds = extractTaggedPeople()
 
     try {
+      // Enhanced timeout handling for Facebook API
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+
       // ✅ Handle carousel posts (multiple images)
       if (postType === "carousel" && fileUrls.length > 1) {
         const attachedMedia = []
 
         for (const url of fileUrls) {
+          setPostingStatus(prev => ({
+            ...prev,
+            message: `Uploading carousel image ${attachedMedia.length + 1}/${fileUrls.length} to Facebook...`
+          }))
+
           // ✅ Upload each image via FormData so Facebook can read it
           const formData = new FormData()
           formData.append("access_token", selectedFacebookPage.access_token)
@@ -1030,6 +1271,7 @@ export default function DashboardPage() {
           const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
             method: "POST",
             body: formData,
+            signal: controller.signal
           })
 
           if (!photoResponse.ok) {
@@ -1063,6 +1305,7 @@ export default function DashboardPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(postData),
+          signal: controller.signal
         })
 
         if (!response.ok) {
@@ -1071,6 +1314,7 @@ export default function DashboardPage() {
           throw new Error(errData.error?.message || "Failed to post carousel to Facebook")
         }
 
+        clearTimeout(timeoutId)
         return
       }
 
@@ -1078,6 +1322,11 @@ export default function DashboardPage() {
         const isVideo = fileTypes[0]?.startsWith("video/")
 
         if (isVideo) {
+          setPostingStatus(prev => ({
+            ...prev,
+            message: "Uploading video to Facebook..."
+          }))
+
           const videoUrl = fileUrls[0]
           const pageAccessToken = selectedFacebookPage.access_token
 
@@ -1098,6 +1347,7 @@ export default function DashboardPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+            signal: controller.signal
           })
 
           const data = await response.json()
@@ -1105,6 +1355,11 @@ export default function DashboardPage() {
           console.log("✅ Facebook video uploaded:", data)
         } else {
           // Handle image upload
+          setPostingStatus(prev => ({
+            ...prev,
+            message: "Uploading image to Facebook..."
+          }))
+
           const formData = new FormData()
           formData.append("caption", postContent)
           formData.append("access_token", selectedFacebookPage.access_token)
@@ -1126,6 +1381,7 @@ export default function DashboardPage() {
           const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
             method: "POST",
             body: formData,
+            signal: controller.signal
           })
 
           if (!response.ok) {
@@ -1136,6 +1392,11 @@ export default function DashboardPage() {
         }
       } else {
         // Text-only post
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Publishing text post to Facebook..."
+        }))
+
         const postData: any = {
           message: postContent,
           access_token: selectedFacebookPage.access_token,
@@ -1155,6 +1416,7 @@ export default function DashboardPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(postData),
+          signal: controller.signal
         })
 
         if (!response.ok) {
@@ -1163,222 +1425,261 @@ export default function DashboardPage() {
           throw new Error(errData.error?.message || "Failed to post text to Facebook")
         }
       }
+
+      clearTimeout(timeoutId)
     } catch (error) {
       console.error("❌ Facebook post failed:", error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error("Facebook request timeout - please try again")
+      }
       throw error
     }
-  }
-
-  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 20): Promise<boolean> => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const response = await fetch(
-          `https://graph.facebook.com/v18.0/${mediaId}?fields=status_code&access_token=${accessToken}`,
-        )
-
-        if (!response.ok) {
-          console.log(` Media status check failed, attempt ${attempt + 1}`)
-          await new Promise((resolve) => setTimeout(resolve, 5000)) // Wait 2 seconds
-          continue
-        }
-
-        const result = await response.json()
-        console.log(` Media status check attempt ${attempt + 1}:`, result)
-
-        if (result.status_code === "FINISHED") {
-          return true
-        } else if (result.status_code === "ERROR") {
-          throw new Error("Media processing failed")
-        }
-
-        // Wait 2 seconds before next attempt
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-      } catch (error) {
-        console.log(` Error checking media status, attempt ${attempt + 1}:`, error)
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-      }
-    }
-
-    throw new Error("Media processing timeout - please try again")
   }
 
   const postToInstagramAccount = async (fileUrls: string[]) => {
     if (!selectedInstagramAccount) return
 
-    if (postType === "carousel" && fileUrls.length > 1) {
-      // Instagram carousel post
-      const mediaIds = []
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 180000) // 3 minute timeout for Instagram
 
-      for (let i = 0; i < fileUrls.length; i++) {
-        const url = fileUrls[i]
-        const isVideo = fileTypes[i]?.startsWith("video/")
-        const mediaType = isVideo ? "video_url" : "image_url"
+      if (postType === "carousel" && fileUrls.length > 1) {
+        // Instagram carousel post
+        const mediaIds = []
 
-        console.log(` Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
+        for (let i = 0; i < fileUrls.length; i++) {
+          setPostingStatus(prev => ({
+            ...prev,
+            message: `Creating carousel item ${i + 1}/${fileUrls.length} for Instagram...`
+          }))
+
+          const url = fileUrls[i]
+          const isVideo = fileTypes[i]?.startsWith("video/")
+          const mediaType = isVideo ? "video_url" : "image_url"
+
+          console.log(` Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
+
+          const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              [mediaType]: url,
+              is_carousel_item: true,
+              access_token: (selectedInstagramAccount as any).access_token,
+            }),
+            signal: controller.signal
+          })
+
+          if (!containerResponse.ok) {
+            const errorData = await containerResponse.json()
+            console.log(` Instagram carousel item creation failed:`, errorData)
+            throw new Error(errorData.error?.message || "Failed to create carousel item")
+          }
+
+          const containerResult = await containerResponse.json()
+          mediaIds.push(containerResult.id)
+
+          console.log(` Waiting for carousel item processing: ${containerResult.id}`)
+          setPostingStatus(prev => ({
+            ...prev,
+            message: `Processing carousel item ${i + 1}/${fileUrls.length}...`
+          }))
+          await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
+        }
+
+        // Create carousel container
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Creating Instagram carousel..."
+        }))
+
+        const carouselResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            media_type: "CAROUSEL",
+            children: mediaIds.join(","),
+            caption: postContent,
+            access_token: (selectedInstagramAccount as any).access_token,
+          }),
+          signal: controller.signal
+        })
+
+        if (!carouselResponse.ok) {
+          const errorData = await carouselResponse.json()
+          throw new Error(errorData.error?.message || "Failed to create carousel container")
+        }
+
+        const carouselResult = await carouselResponse.json()
+
+        // Publish carousel
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Publishing Instagram carousel..."
+        }))
+
+        const publishResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              creation_id: carouselResult.id,
+              access_token: (selectedInstagramAccount as any).access_token,
+            }),
+            signal: controller.signal
+          },
+        )
+
+        if (!publishResponse.ok) {
+          const errorData = await publishResponse.json()
+          throw new Error(errorData.error?.message || "Failed to publish carousel to Instagram")
+        }
+      } else if (postType === "reel" && fileUrls.length > 0) {
+        // Instagram Reel
+        console.log(` Creating Instagram reel with video: ${fileUrls[0]}`)
+
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Creating Instagram reel..."
+        }))
+
+        const containerPayload: any = {
+          media_type: "REELS",
+          video_url: fileUrls[0],
+          caption: postContent,
+          access_token: (selectedInstagramAccount as any).access_token,
+        }
 
         const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            [mediaType]: url,
-            is_carousel_item: true,
-            access_token: (selectedInstagramAccount as any).access_token,
-          }),
+          body: JSON.stringify(containerPayload),
+          signal: controller.signal
         })
 
         if (!containerResponse.ok) {
           const errorData = await containerResponse.json()
-          console.log(` Instagram carousel item creation failed:`, errorData)
-          throw new Error(errorData.error?.message || "Failed to create carousel item")
+          console.log(` Instagram reel container creation failed:`, errorData)
+          throw new Error(errorData.error?.message || "Failed to create Instagram reel")
         }
 
         const containerResult = await containerResponse.json()
-        mediaIds.push(containerResult.id)
+        console.log(` Instagram reel container created:`, containerResult)
 
-        console.log(` Waiting for carousel item processing: ${containerResult.id}`)
+        console.log(` Waiting for reel video processing: ${containerResult.id}`)
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Processing reel video..."
+        }))
         await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
-      }
 
-      // Create carousel container
-      const carouselResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          media_type: "CAROUSEL",
-          children: mediaIds.join(","),
+        // Publish reel
+        console.log(` Publishing Instagram reel: ${containerResult.id}`)
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Publishing Instagram reel..."
+        }))
+
+        const publishResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              creation_id: containerResult.id,
+              access_token: (selectedInstagramAccount as any).access_token,
+            }),
+            signal: controller.signal
+          },
+        )
+
+        if (!publishResponse.ok) {
+          const errorData = await publishResponse.json()
+          console.log(` Instagram reel publish failed:`, errorData)
+          throw new Error(errorData.error?.message || "Failed to publish reel to Instagram")
+        }
+
+        console.log(` Instagram reel published successfully`)
+      } else {
+        // Regular Instagram post
+        const isVideo = fileTypes[0]?.startsWith("video/")
+        const mediaType = isVideo ? "video_url" : "image_url"
+
+        console.log(` Creating Instagram post: ${mediaType} = ${fileUrls[0]}`)
+        console.log(` File type detected: ${fileTypes[0]}`)
+
+        setPostingStatus(prev => ({
+          ...prev,
+          message: `Creating Instagram ${isVideo ? 'video' : 'image'} post...`
+        }))
+
+        const containerPayload: any = {
+          [mediaType]: fileUrls[0],
           caption: postContent,
           access_token: (selectedInstagramAccount as any).access_token,
-        }),
-      })
+        }
 
-      if (!carouselResponse.ok) {
-        const errorData = await carouselResponse.json()
-        throw new Error(errorData.error?.message || "Failed to create carousel container")
-      }
+        console.log(` Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
 
-      const carouselResult = await carouselResponse.json()
-
-      // Publish carousel
-      const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
-        {
+        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: carouselResult.id,
-            access_token: (selectedInstagramAccount as any).access_token,
-          }),
-        },
-      )
+          body: JSON.stringify(containerPayload),
+          signal: controller.signal
+        })
 
-      if (!publishResponse.ok) {
-        const errorData = await publishResponse.json()
-        throw new Error(errorData.error?.message || "Failed to publish carousel to Instagram")
-      }
-    } else if (postType === "reel" && fileUrls.length > 0) {
-      // Instagram Reel
-      console.log(` Creating Instagram reel with video: ${fileUrls[0]}`)
+        if (!containerResponse.ok) {
+          const errorData = await containerResponse.json()
+          console.log(` Instagram media container creation failed:`, errorData)
+          throw new Error(errorData.error?.message || "Failed to create Instagram media container")
+        }
 
-      const containerPayload: any = {
-        media_type: "REELS",
-        video_url: fileUrls[0],
-        caption: postContent,
-        access_token: (selectedInstagramAccount as any).access_token,
-      }
+        const containerResult = await containerResponse.json()
+        console.log(` Instagram container created:`, containerResult)
 
-      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(containerPayload),
-      })
+        console.log(` Waiting for media processing: ${containerResult.id}`)
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Processing media for Instagram..."
+        }))
+        await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
 
-      if (!containerResponse.ok) {
-        const errorData = await containerResponse.json()
-        console.log(` Instagram reel container creation failed:`, errorData)
-        throw new Error(errorData.error?.message || "Failed to create Instagram reel")
-      }
+        console.log(` Publishing Instagram post: ${containerResult.id}`)
+        setPostingStatus(prev => ({
+          ...prev,
+          message: "Publishing to Instagram..."
+        }))
 
-      const containerResult = await containerResponse.json()
-      console.log(` Instagram reel container created:`, containerResult)
+        const publishResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              creation_id: containerResult.id,
+              access_token: (selectedInstagramAccount as any).access_token,
+            }),
+            signal: controller.signal
+          },
+        )
 
-      console.log(` Waiting for reel video processing: ${containerResult.id}`)
-      await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
+        if (!publishResponse.ok) {
+          const errorData = await publishResponse.json()
+          console.log(` Instagram publish failed:`, errorData)
+          throw new Error(errorData.error?.message || "Failed to publish to Instagram")
+        }
 
-      // Publish reel
-      console.log(` Publishing Instagram reel: ${containerResult.id}`)
-      const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: containerResult.id,
-            access_token: (selectedInstagramAccount as any).access_token,
-          }),
-        },
-      )
-
-      if (!publishResponse.ok) {
-        const errorData = await publishResponse.json()
-        console.log(` Instagram reel publish failed:`, errorData)
-        throw new Error(errorData.error?.message || "Failed to publish reel to Instagram")
+        console.log(` Instagram post published successfully`)
       }
 
-      console.log(` Instagram reel published successfully`)
-    } else {
-      // Regular Instagram post
-      const isVideo = fileTypes[0]?.startsWith("video/")
-      const mediaType = isVideo ? "video_url" : "image_url"
-
-      console.log(` Creating Instagram post: ${mediaType} = ${fileUrls[0]}`)
-      console.log(` File type detected: ${fileTypes[0]}`)
-
-      const containerPayload: any = {
-        [mediaType]: fileUrls[0],
-        caption: postContent,
-        access_token: (selectedInstagramAccount as any).access_token,
+      clearTimeout(timeoutId)
+    } catch (error) {
+      console.error("❌ Instagram post failed:", error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error("Instagram request timeout - please try again")
       }
-
-      console.log(` Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
-
-      const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(containerPayload),
-      })
-
-      if (!containerResponse.ok) {
-        const errorData = await containerResponse.json()
-        console.log(` Instagram media container creation failed:`, errorData)
-        throw new Error(errorData.error?.message || "Failed to create Instagram media container")
-      }
-
-      const containerResult = await containerResponse.json()
-      console.log(` Instagram container created:`, containerResult)
-
-      console.log(` Waiting for media processing: ${containerResult.id}`)
-      await waitForMediaProcessing(containerResult.id, (selectedInstagramAccount as any).access_token)
-
-      console.log(` Publishing Instagram post: ${containerResult.id}`)
-      const publishResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: containerResult.id,
-            access_token: (selectedInstagramAccount as any).access_token,
-          }),
-        },
-      )
-
-      if (!publishResponse.ok) {
-        const errorData = await publishResponse.json()
-        console.log(` Instagram publish failed:`, errorData)
-        throw new Error(errorData.error?.message || "Failed to publish to Instagram")
-      }
-
-      console.log(` Instagram post published successfully`)
+      throw error
     }
   }
 
@@ -1402,12 +1703,6 @@ export default function DashboardPage() {
     // Validate each file
     for (const file of files) {
       console.log(" Processing file:", file.name, "Type:", file.type, "Size:", file.size)
-
-      // // File size validation
-      // if (file.size > 100 * 1024 * 1024) {
-      //   setError(`File "${file.name}" is too large. Maximum size is 100MB`)
-      //   return
-      // }
 
       // Type validation based on post type
       if (postType === "reel") {
@@ -1454,6 +1749,11 @@ export default function DashboardPage() {
       validFiles.map((f) => f.name),
     )
     console.log(" File types detected:", types)
+
+    // Reset the file input to allow selecting the same files again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const removeFile = (index: number) => {
@@ -1723,6 +2023,58 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Posting Status Banner */}
+      {postingStatus.isPosting && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white p-4 shadow-lg">
+          <div className="container mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4 flex-1">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <div className="flex-1">
+                  <p className="font-medium">{postingStatus.message}</p>
+                  <div className="flex items-center space-x-4 text-sm text-blue-100">
+                    <span>{postingStatus.currentStep}</span>
+                    {postingStatus.estimatedTime && (
+                      <span className="flex items-center">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Est: {postingStatus.estimatedTime}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="w-48">
+                <Progress value={postingStatus.progress} className="h-2 bg-blue-700" />
+                <p className="text-xs text-blue-100 text-right mt-1">{Math.round(postingStatus.progress)}%</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Progress Banner */}
+      {uploadProgress.isUploading && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-green-600 text-white p-4 shadow-lg">
+          <div className="container mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4 flex-1">
+                <Upload className="h-5 w-5" />
+                <div className="flex-1">
+                  <p className="font-medium">
+                    Uploading media ({uploadProgress.currentFileIndex}/{uploadProgress.totalFiles})
+                  </p>
+                  <p className="text-sm text-green-100">Current: {uploadProgress.currentFile}</p>
+                </div>
+              </div>
+              <div className="w-48">
+                <Progress value={uploadProgress.progress} className="h-2 bg-green-700" />
+                <p className="text-xs text-green-100 text-right mt-1">{Math.round(uploadProgress.progress)}%</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -1842,7 +2194,10 @@ export default function DashboardPage() {
                   Select Pages
                 </Button>
               </div>
-              <Button onClick={() => setShowPostModal(true)} disabled={!isFacebookTokenSet && !isInstagramTokenSet}>
+              <Button
+                onClick={() => setShowPostModal(true)}
+                disabled={!isFacebookTokenSet && !isInstagramTokenSet || postingStatus.isPosting}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Post
               </Button>
@@ -1855,7 +2210,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8" style={{ marginTop: postingStatus.isPosting || uploadProgress.isUploading ? '80px' : '0' }}>
         <div className="space-y-8">
           <div className="space-y-2">
             <h2 className="text-3xl font-bold font-serif">Social Media Dashboard</h2>
@@ -1865,7 +2220,11 @@ export default function DashboardPage() {
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error == "Media processing timeout - please try again" ? "Media processing timeout - but this doesnt mean not posted,once check" : error}</AlertDescription>
+              <AlertDescription>
+                {error.includes("timeout") || error.includes("longer than expected")
+                  ? `${error} This is normal for US regions due to longer processing times. Please check your social media accounts directly.`
+                  : error}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -1874,7 +2233,6 @@ export default function DashboardPage() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="posts">Posts</TabsTrigger>
-              {/* <TabsTrigger value="demographics">Demographics</TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -2370,6 +2728,7 @@ export default function DashboardPage() {
               </Label>
               <div className="flex items-center space-x-2">
                 <Input
+                  ref={fileInputRef}
                   id="media-upload"
                   type="file"
                   accept={postType === "reel" ? "video/*" : postType === "carousel" ? "image/*" : "image/*,video/*"}
@@ -2391,6 +2750,13 @@ export default function DashboardPage() {
                   </Button>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                {postType === "carousel"
+                  ? "You can select multiple images (2-10) by holding Ctrl/Cmd and clicking, or by dragging and dropping"
+                  : postType === "reel"
+                    ? "Select one video file"
+                    : "Select one image or video file"}
+              </p>
 
               {filePreviews.length > 0 && (
                 <div className="mt-2">
@@ -2419,6 +2785,10 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+                    {postType === "carousel" && ` (${selectedFiles.length}/10)`}
+                  </p>
                 </div>
               )}
             </div>
@@ -2466,8 +2836,16 @@ export default function DashboardPage() {
               <Button variant="outline" onClick={() => setShowPostModal(false)}>
                 Cancel
               </Button>
-              <Button onClick={handlePost}>
-             {isScheduled ? (
+              <Button
+                onClick={handlePost}
+                disabled={postingStatus.isPosting || uploadProgress.isUploading}
+              >
+                {postingStatus.isPosting || uploadProgress.isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {uploadProgress.isUploading ? 'Uploading...' : 'Posting...'}
+                  </>
+                ) : isScheduled ? (
                   <>
                     <Calendar className="h-4 w-4 mr-2" />
                     Schedule {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : "Post"}
@@ -2484,7 +2862,7 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-  <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
+      <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Select Your Accounts</DialogTitle>
@@ -2541,7 +2919,6 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
-      
     </div>
   )
 }
