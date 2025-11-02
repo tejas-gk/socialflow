@@ -797,23 +797,23 @@ export default function DashboardPage() {
         }
 
         // Upload file with timeout
-        // const uploadController = new AbortController()
-        // const uploadTimeoutId = setTimeout(() => uploadController.abort(), 120000) // 2 minute timeout for large files
+        const uploadController = new AbortController()
+        const uploadTimeoutId = setTimeout(() => uploadController.abort(), 120000) // 2 minute timeout for large files
 
-        // const uploadResponse = await fetch(uploadUrl, {
-        //   method: "PUT",
-        //   body: file,
-        //   headers: {
-        //     "Content-Type": file.type,
-        //   },
-        //   signal: uploadController.signal
-        // })
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
+          signal: uploadController.signal
+        })
 
-        // clearTimeout(uploadTimeoutId)
+        clearTimeout(uploadTimeoutId)
 
-        // if (!uploadResponse.ok) {
-        //   throw new Error("Failed to upload file")
-        // }
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload file")
+        }
 
         setUploadProgress(prev => ({
           ...prev,
