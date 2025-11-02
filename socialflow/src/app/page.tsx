@@ -804,10 +804,9 @@ export default function DashboardPage() {
           method: "PUT",
           body: file,
           headers: {
-            "Content-Type": file.type,
-          "x-amz-acl": "public-read"
+            "Content-Type": "video/mp4",
           },
-          signal: uploadController.signal
+          // signal: uploadController.signal
         })
 
         clearTimeout(uploadTimeoutId)
