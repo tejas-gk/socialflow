@@ -805,6 +805,7 @@ export default function DashboardPage() {
           body: file,
           headers: {
             "Content-Type": file.type,
+          "x-amz-acl": "public-read"
           },
           signal: uploadController.signal
         })
