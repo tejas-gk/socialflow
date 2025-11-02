@@ -47,6 +47,7 @@ import {
 import EmojiPicker from "emoji-picker-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
+import { useEdgeStore } from "@/lib/edgestore"
 
 interface FacebookPage {
   id: string
@@ -135,6 +136,9 @@ interface PostAnalytics {
 }
 
 export default function DashboardPage() {
+  // EdgeStore hook
+  const { edgestore } = useEdgeStore()
+
   const [facebookAccessToken, setFacebookAccessToken] = useState("")
   const [instagramAccessToken, setInstagramAccessToken] = useState("")
   const [isFacebookTokenSet, setIsFacebookTokenSet] = useState(false)
@@ -744,8 +748,8 @@ export default function DashboardPage() {
     }
   }, [selectedInstagramAccount, instagramPosts])
 
-  // Enhanced upload with timeout handling
-  const uploadFilesToS3 = async (files: File[]): Promise<string[]> => {
+  // EdgeStore Upload Function
+  const uploadFilesToEdgeStore = async (files: File[]): Promise<string[]> => {
     setUploadProgress({
       isUploading: true,
       progress: 0,
@@ -756,7 +760,7 @@ export default function DashboardPage() {
 
     const uploadPromises = files.map(async (file, index) => {
       try {
-        console.log(" Starting S3 upload for file:", file.name, "Type:", file.type)
+        console.log(" Starting EdgeStore upload for file:", file.name, "Type:", file.type)
 
         setUploadProgress(prev => ({
           ...prev,
@@ -765,68 +769,39 @@ export default function DashboardPage() {
           progress: (index / files.length) * 100
         }))
 
-        // Add timeout for S3 upload
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
-
-        const response = await fetch("/api/s3-upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+        // Upload to EdgeStore
+        const res = await edgestore.publicFiles.upload({
+          file,
+          onProgressChange: (progress) => {
+            console.log(`Upload progress for ${file.name}: ${progress}%`)
           },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type,
-          }),
-          signal: controller.signal
+          options: {
+            temporary: false,
+          }
         })
 
-        clearTimeout(timeoutId)
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.log(" S3 upload API error:", errorText)
-          throw new Error("Failed to get upload URL")
-        }
-
-        const { uploadUrl, fileUrl } = await response.json()
-        console.log(" Got upload URL:", uploadUrl)
-
-        if (!uploadUrl) {
-          throw new Error("No upload URL received from API")
-        }
-
-        // Upload file with timeout
-        const uploadController = new AbortController()
-        const uploadTimeoutId = setTimeout(() => uploadController.abort(), 120000) // 2 minute timeout for large files
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type,
-          },
-          signal: uploadController.signal
-        })
-
-        clearTimeout(uploadTimeoutId)
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload file")
-        }
+        console.log(" EdgeStore upload successful:", res)
 
         setUploadProgress(prev => ({
           ...prev,
           progress: ((index + 1) / files.length) * 100
         }))
 
-        return fileUrl
+        return res.url
       } catch (error) {
-        console.error(" Error uploading file:", error)
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error(`Upload timeout for ${file.name}. Please try again.`)
+        console.error(" Error uploading file to EdgeStore:", error)
+
+        // Handle specific EdgeStore errors
+        if (error instanceof Error) {
+          if (error.message.includes('File too large')) {
+            throw new Error(`File ${file.name} is too large. Maximum size is 100MB.`)
+          }
+          if (error.message.includes('Invalid file type')) {
+            throw new Error(`File ${file.name} is not a supported image or video format.`)
+          }
         }
-        throw error
+
+        throw new Error(`Failed to upload ${file.name}. Please try again.`)
       }
     })
 
@@ -840,179 +815,8 @@ export default function DashboardPage() {
       currentFileIndex: 0
     })
 
+    console.log(" All files uploaded to EdgeStore:", results)
     return results
-  }
-
-  const validatePost = (): string | null => {
-    // Platform selection validation
-    if (!postToFacebook && !postToInstagram) {
-      return "Please select at least one platform to post to"
-    }
-
-    // Account selection validation
-    if (postToFacebook && !selectedFacebookPage) {
-      return "Please select a Facebook page to post to"
-    }
-
-    if (postToInstagram && !selectedInstagramAccount) {
-      return "Please select an Instagram account to post to"
-    }
-
-    // Content validation based on platform and post type
-    const hasContent = postContent.trim().length > 0
-    const hasMedia = selectedFiles.length > 0
-
-    // Instagram-specific validations
-    if (postToInstagram) {
-      // Instagram always requires media (except for text posts which aren't supported)
-      if (!hasMedia) {
-        return "Instagram posts require at least one image or video"
-      }
-
-      // Instagram character limits
-      if (postContent.length > 2200) {
-        return "Instagram captions cannot exceed 2,200 characters"
-      }
-
-      if (isScheduled && scheduledDate) {
-        return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
-      }
-
-      // Instagram reel validations
-      if (postType === "reel") {
-        if (selectedFiles.length !== 1) {
-          return "Instagram reels require exactly one video file"
-        }
-        const file = selectedFiles[0]
-        if (!file.type.startsWith("video/")) {
-          return "Instagram reels must be video files"
-        }
-      }
-
-      // Instagram carousel validations
-      if (postType === "carousel") {
-        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
-          return "Instagram carousels require 2-10 images or videos"
-        }
-        // Instagram allows mixed media in carousels
-        const hasInvalidFiles = selectedFiles.some(
-          (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
-        )
-        if (hasInvalidFiles) {
-          return "Instagram carousel items must be images or videos"
-        }
-      }
-
-      // Instagram regular post validations
-      if (postType === "post") {
-        if (selectedFiles.length > 1) {
-          return "Instagram single posts can only have one image or video"
-        }
-        const file = selectedFiles[0]
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-          return "Instagram posts must be images or videos"
-        }
-      }
-    }
-
-    // Facebook-specific validations
-    if (postToFacebook) {
-      // Facebook allows text-only posts
-      if (!hasContent && !hasMedia) {
-        return "Facebook posts require either text content or media"
-      }
-
-      // Facebook character limits
-      if (postContent.length > 63206) {
-        return "Facebook posts cannot exceed 63,206 characters"
-      }
-
-      // Facebook reel validations
-      if (postType === "reel") {
-        if (selectedFiles.length !== 1) {
-          return "Facebook reels require exactly one video file"
-        }
-        const file = selectedFiles[0]
-        if (!file.type.startsWith("video/")) {
-          return "Facebook reels must be video files"
-        }
-        // Additional Facebook video format validation
-        const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi"]
-        if (!supportedVideoTypes.includes(file.type)) {
-          return "Facebook supports MP4, MOV, and AVI video formats for reels"
-        }
-        // File size validation for Facebook videos
-        if (file.size > 4000 * 1024 * 1024) {
-          return "Video file must be smaller than 4GB for Facebook"
-        }
-      }
-
-      // Facebook carousel validations
-      if (postType === "carousel") {
-        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
-          return "Facebook carousels require 2-10 images"
-        }
-        // Facebook carousels are image-only
-        const hasNonImages = selectedFiles.some((file) => !file.type.startsWith("image/"))
-        if (hasNonImages) {
-          return "Facebook carousel posts can only contain images"
-        }
-      }
-
-      // Facebook regular post validations
-      if (postType === "post" && hasMedia) {
-        if (selectedFiles.length > 1) {
-          return "Facebook single posts can only have one image or video"
-        }
-      }
-    }
-
-    // Cross-platform validations when posting to both
-    if (postToFacebook && postToInstagram) {
-      // When posting to both platforms, ensure compatibility
-      if (postType === "carousel") {
-        // Both platforms support image carousels, but Facebook doesn't support video carousels
-        const hasVideos = selectedFiles.some((file) => file.type.startsWith("video/"))
-        if (hasVideos) {
-          return "When posting carousels to both platforms, only images are supported"
-        }
-      }
-
-      if (!hasMedia) {
-        return "When posting to both platforms, media is required (Instagram requirement)"
-      }
-
-      // Use the more restrictive character limit
-      if (postContent.length > 2200) {
-        return "When posting to both platforms, captions cannot exceed 2,200 characters (Instagram limit)"
-      }
-    }
-
-    // File size validations
-    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024 * 1024)
-    if (oversizedFiles.length > 0) {
-      return "All files must be smaller than 100MB"
-    }
-
-    // Scheduling validations
-    if (scheduledDate) {
-      const now = new Date()
-      const scheduled = new Date(scheduledDate)
-
-      if (scheduled <= now) {
-        return "Scheduled time must be in the future"
-      }
-
-      // Facebook allows scheduling up to 6 months in advance
-      const sixMonthsFromNow = new Date()
-      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6)
-
-      if (scheduled > sixMonthsFromNow) {
-        return "Posts cannot be scheduled more than 6 months in advance"
-      }
-    }
-
-    return null
   }
 
   // Enhanced waitForMediaProcessing with better timeout handling
@@ -1098,7 +902,7 @@ export default function DashboardPage() {
     try {
       let fileUrls: string[] = []
 
-      // Upload files to S3 if selected
+      // Upload files to EdgeStore if selected
       if (selectedFiles.length > 0) {
         setPostingStatus({
           isPosting: true,
@@ -1108,9 +912,9 @@ export default function DashboardPage() {
           estimatedTime
         })
 
-        console.log(" Uploading files to S3...")
-        fileUrls = await uploadFilesToS3(selectedFiles)
-        console.log(" Files uploaded to S3:", fileUrls)
+        console.log(" Uploading files to EdgeStore...")
+        fileUrls = await uploadFilesToEdgeStore(selectedFiles)
+        console.log(" Files uploaded to EdgeStore:", fileUrls)
 
         setPostingStatus({
           isPosting: true,
@@ -1263,7 +1067,7 @@ export default function DashboardPage() {
           formData.append("access_token", selectedFacebookPage.access_token)
           formData.append("published", "false")
 
-          // Try fetching image binary (from S3 or Supabase)
+          // Try fetching image binary (from EdgeStore)
           const fileResponse = await fetch(url)
           const blob = await fileResponse.blob()
           formData.append("source", blob)
@@ -1763,6 +1567,178 @@ export default function DashboardPage() {
     setSelectedFiles(newFiles)
     setFilePreviews(newPreviews)
     setFileTypes(newTypes)
+  }
+
+  const validatePost = (): string | null => {
+    // Platform selection validation
+    if (!postToFacebook && !postToInstagram) {
+      return "Please select at least one platform to post to"
+    }
+
+    // Account selection validation
+    if (postToFacebook && !selectedFacebookPage) {
+      return "Please select a Facebook page to post to"
+    }
+
+    if (postToInstagram && !selectedInstagramAccount) {
+      return "Please select an Instagram account to post to"
+    }
+
+    // Content validation based on platform and post type
+    const hasContent = postContent.trim().length > 0
+    const hasMedia = selectedFiles.length > 0
+
+    // Instagram-specific validations
+    if (postToInstagram) {
+      // Instagram always requires media (except for text posts which aren't supported)
+      if (!hasMedia) {
+        return "Instagram posts require at least one image or video"
+      }
+
+      // Instagram character limits
+      if (postContent.length > 2200) {
+        return "Instagram captions cannot exceed 2,200 characters"
+      }
+
+      if (isScheduled && scheduledDate) {
+        return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
+      }
+
+      // Instagram reel validations
+      if (postType === "reel") {
+        if (selectedFiles.length !== 1) {
+          return "Instagram reels require exactly one video file"
+        }
+        const file = selectedFiles[0]
+        if (!file.type.startsWith("video/")) {
+          return "Instagram reels must be video files"
+        }
+      }
+
+      // Instagram carousel validations
+      if (postType === "carousel") {
+        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
+          return "Instagram carousels require 2-10 images or videos"
+        }
+        // Instagram allows mixed media in carousels
+        const hasInvalidFiles = selectedFiles.some(
+          (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
+        )
+        if (hasInvalidFiles) {
+          return "Instagram carousel items must be images or videos"
+        }
+      }
+
+      // Instagram regular post validations
+      if (postType === "post") {
+        if (selectedFiles.length > 1) {
+          return "Instagram single posts can only have one image or video"
+        }
+        const file = selectedFiles[0]
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+          return "Instagram posts must be images or videos"
+        }
+      }
+    }
+
+    // Facebook-specific validations
+    if (postToFacebook) {
+      // Facebook allows text-only posts
+      if (!hasContent && !hasMedia) {
+        return "Facebook posts require either text content or media"
+      }
+
+      // Facebook character limits
+      if (postContent.length > 63206) {
+        return "Facebook posts cannot exceed 63,206 characters"
+      }
+
+      // Facebook reel validations
+      if (postType === "reel") {
+        if (selectedFiles.length !== 1) {
+          return "Facebook reels require exactly one video file"
+        }
+        const file = selectedFiles[0]
+        if (!file.type.startsWith("video/")) {
+          return "Facebook reels must be video files"
+        }
+        // Additional Facebook video format validation
+        const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi"]
+        if (!supportedVideoTypes.includes(file.type)) {
+          return "Facebook supports MP4, MOV, and AVI video formats for reels"
+        }
+        // File size validation for Facebook videos
+        if (file.size > 4000 * 1024 * 1024) {
+          return "Video file must be smaller than 4GB for Facebook"
+        }
+      }
+
+      // Facebook carousel validations
+      if (postType === "carousel") {
+        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
+          return "Facebook carousels require 2-10 images"
+        }
+        // Facebook carousels are image-only
+        const hasNonImages = selectedFiles.some((file) => !file.type.startsWith("image/"))
+        if (hasNonImages) {
+          return "Facebook carousel posts can only contain images"
+        }
+      }
+
+      // Facebook regular post validations
+      if (postType === "post" && hasMedia) {
+        if (selectedFiles.length > 1) {
+          return "Facebook single posts can only have one image or video"
+        }
+      }
+    }
+
+    // Cross-platform validations when posting to both
+    if (postToFacebook && postToInstagram) {
+      // When posting to both platforms, ensure compatibility
+      if (postType === "carousel") {
+        // Both platforms support image carousels, but Facebook doesn't support video carousels
+        const hasVideos = selectedFiles.some((file) => file.type.startsWith("video/"))
+        if (hasVideos) {
+          return "When posting carousels to both platforms, only images are supported"
+        }
+      }
+
+      if (!hasMedia) {
+        return "When posting to both platforms, media is required (Instagram requirement)"
+      }
+
+      // Use the more restrictive character limit
+      if (postContent.length > 2200) {
+        return "When posting to both platforms, captions cannot exceed 2,200 characters (Instagram limit)"
+      }
+    }
+
+    // File size validations
+    const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024 * 1024)
+    if (oversizedFiles.length > 0) {
+      return "All files must be smaller than 100MB"
+    }
+
+    // Scheduling validations
+    if (scheduledDate) {
+      const now = new Date()
+      const scheduled = new Date(scheduledDate)
+
+      if (scheduled <= now) {
+        return "Scheduled time must be in the future"
+      }
+
+      // Facebook allows scheduling up to 6 months in advance
+      const sixMonthsFromNow = new Date()
+      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6)
+
+      if (scheduled > sixMonthsFromNow) {
+        return "Posts cannot be scheduled more than 6 months in advance"
+      }
+    }
+
+    return null
   }
 
   const handleTokenSubmit = () => {

@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
 
         const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
         const clientSecret = process.env.FACEBOOK_APP_SECRET
-        const redirectUri = `${request.nextUrl.origin}/auth/facebook/callback`
+        const redirectUri = `https://rajgupta.pixelsandgrids.com/auth/facebook/callback`
 
         if (!clientId || !clientSecret) {
             return NextResponse.json({ error: "Facebook app credentials not configured" }, { status: 500 })

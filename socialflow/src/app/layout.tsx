@@ -16,7 +16,7 @@ const openSans = Open_Sans({
   variable: "--font-open-sans",
   weight: ["400", "600"],
 });
-
+import { EdgeStoreProvider } from '../lib/edgestore';
 export const metadata: Metadata = {
   title: "SocialFlow - Social Media Management Platform",
   description: "Professional social media management platform for Instagram and Facebook",
@@ -29,10 +29,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // <ClerkProvider>
       <html lang="en" className={`${montserrat.variable} ${openSans.variable} antialiased`}>
-        <body className="font-sans" suppressHydrationWarning={true}>
-        {children}
+      <body className="font-sans" suppressHydrationWarning={true}>
+        <EdgeStoreProvider>
+          {children}
+          </EdgeStoreProvider>
         <Toaster />
         </body>
       </html>
