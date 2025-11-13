@@ -30,6 +30,8 @@ import {
   Upload,
   CheckCircle,
   Clock,
+  Share2,
+  MessageCircle,
 } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -69,6 +71,29 @@ interface InstagramAccount {
   media_count?: number
 }
 
+interface PinterestBoard {
+  id: string
+  name: string
+  description?: string
+  pin_count?: number
+}
+
+interface PinterestAccount {
+  id: string
+  username: string
+  full_name?: string
+  profile_picture?: string
+  board_count?: number
+}
+
+interface ThreadsAccount {
+  id: string
+  username: string
+  name: string
+  profile_picture_url?: string
+  followers_count?: number
+}
+
 interface FacebookPost {
   id: string
   message?: string
@@ -102,6 +127,31 @@ interface InstagramPost {
   permalink?: string
 }
 
+interface PinterestPin {
+  id: string
+  title?: string
+  description?: string
+  media_type: "image" | "video"
+  images?: {
+    [key: string]: {
+      url: string
+    }
+  }
+  created_at: string
+  like_count?: number
+  comment_count?: number
+  link?: string
+}
+
+interface ThreadsPost {
+  id: string
+  text?: string
+  media_url?: string
+  timestamp: string
+  like_count?: number
+  reply_count?: number
+}
+
 interface FacebookInsights {
   page_impressions: number
   page_engaged_users: number
@@ -119,6 +169,23 @@ interface InstagramInsights {
   website_clicks: number
   follower_count: number
   media_count: number
+}
+
+interface PinterestInsights {
+  pin_impressions: number
+  total_engagements: number
+  pin_clicks: number
+  outbound_clicks: number
+  follower_count: number
+  pin_count: number
+}
+
+interface ThreadsInsights {
+  impressions: number
+  reach: number
+  profile_views: number
+  follower_count: number
+  engagement: number
 }
 
 interface Demographics {
@@ -141,16 +208,36 @@ export default function DashboardPage() {
 
   const [facebookAccessToken, setFacebookAccessToken] = useState("")
   const [instagramAccessToken, setInstagramAccessToken] = useState("")
+  const [pinterestAccessToken, setPinterestAccessToken] = useState("")
+  const [threadsAccessToken, setThreadsAccessToken] = useState("")
+
   const [isFacebookTokenSet, setIsFacebookTokenSet] = useState(false)
   const [isInstagramTokenSet, setIsInstagramTokenSet] = useState(false)
+  const [isPinterestTokenSet, setIsPinterestTokenSet] = useState(false)
+  const [isThreadsTokenSet, setIsThreadsTokenSet] = useState(false)
+
   const [facebookPages, setFacebookPages] = useState<FacebookPage[]>([])
   const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccount[]>([])
+  const [pinterestAccounts, setPinterestAccounts] = useState<PinterestAccount[]>([])
+  const [pinterestBoards, setPinterestBoards] = useState<PinterestBoard[]>([])
+  const [threadsAccounts, setThreadsAccounts] = useState<ThreadsAccount[]>([])
+
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
   const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
+  const [selectedPinterestAccount, setSelectedPinterestAccount] = useState<PinterestAccount | null>(null)
+  const [selectedPinterestBoard, setSelectedPinterestBoard] = useState<PinterestBoard | null>(null)
+  const [selectedThreadsAccount, setSelectedThreadsAccount] = useState<ThreadsAccount | null>(null)
+
   const [facebookPosts, setFacebookPosts] = useState<FacebookPost[]>([])
   const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>([])
+  const [pinterestPins, setPinterestPins] = useState<PinterestPin[]>([])
+  const [threadsPosts, setThreadsPosts] = useState<ThreadsPost[]>([])
+
   const [facebookInsights, setFacebookInsights] = useState<FacebookInsights | null>(null)
   const [instagramInsights, setInstagramInsights] = useState<InstagramInsights | null>(null)
+  const [pinterestInsights, setPinterestInsights] = useState<PinterestInsights | null>(null)
+  const [threadsInsights, setThreadsInsights] = useState<ThreadsInsights | null>(null)
+
   const [demographics, setDemographics] = useState<Demographics | null>(null)
   const [postAnalytics, setPostAnalytics] = useState<PostAnalytics[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -170,8 +257,10 @@ export default function DashboardPage() {
 
   const [postToFacebook, setPostToFacebook] = useState(true)
   const [postToInstagram, setPostToInstagram] = useState(false)
+  const [postToPinterest, setPostToPinterest] = useState(false)
+  const [postToThreads, setPostToThreads] = useState(false)
 
-  const [postType, setPostType] = useState<"post" | "reel" | "carousel">("post")
+  const [postType, setPostType] = useState<"post" | "reel" | "carousel" | "pin">("post")
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [filePreviews, setFilePreviews] = useState<string[]>([])
   const [fileTypes, setFileTypes] = useState<string[]>([])
@@ -191,6 +280,11 @@ export default function DashboardPage() {
   const [isSearchingMentions, setIsSearchingMentions] = useState(false)
   const [mentionCursorPosition, setMentionCursorPosition] = useState(0)
   const [taggedPeopleMap, setTaggedPeopleMap] = useState<Map<string, string>>(new Map()) // name -> id mapping
+
+  // Pinterest specific states
+  const [pinTitle, setPinTitle] = useState("")
+  const [pinDescription, setPinDescription] = useState("")
+  const [pinLink, setPinLink] = useState("")
 
   // New states for posting status and upload progress
   const [postingStatus, setPostingStatus] = useState<{
@@ -226,8 +320,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const savedFacebookToken = localStorage.getItem("facebook_access_token")
     const savedInstagramToken = localStorage.getItem("instagram_access_token")
+    const savedPinterestToken = localStorage.getItem("pinterest_access_token")
+    const savedThreadsToken = localStorage.getItem("threads_access_token")
+
     const savedFacebookPage = localStorage.getItem("selected_facebook_page")
     const savedInstagramAccount = localStorage.getItem("selected_instagram_account")
+    const savedPinterestAccount = localStorage.getItem("selected_pinterest_account")
+    const savedPinterestBoard = localStorage.getItem("selected_pinterest_board")
+    const savedThreadsAccount = localStorage.getItem("selected_threads_account")
 
     if (savedFacebookToken) {
       setFacebookAccessToken(savedFacebookToken)
@@ -243,6 +343,20 @@ export default function DashboardPage() {
       setSelectedPlatforms((prev) => [...prev, "instagram"])
     }
 
+    if (savedPinterestToken) {
+      setPinterestAccessToken(savedPinterestToken)
+      setIsPinterestTokenSet(true)
+      fetchPinterestAccounts(savedPinterestToken)
+      setSelectedPlatforms((prev) => [...prev, "pinterest"])
+    }
+
+    if (savedThreadsToken) {
+      setThreadsAccessToken(savedThreadsToken)
+      setIsThreadsTokenSet(true)
+      fetchThreadsAccounts(savedThreadsToken)
+      setSelectedPlatforms((prev) => [...prev, "threads"])
+    }
+
     if (savedFacebookPage) {
       setSelectedFacebookPage(JSON.parse(savedFacebookPage))
     }
@@ -251,32 +365,74 @@ export default function DashboardPage() {
       setSelectedInstagramAccount(JSON.parse(savedInstagramAccount))
     }
 
+    if (savedPinterestAccount) {
+      setSelectedPinterestAccount(JSON.parse(savedPinterestAccount))
+    }
+
+    if (savedPinterestBoard) {
+      setSelectedPinterestBoard(JSON.parse(savedPinterestBoard))
+    }
+
+    if (savedThreadsAccount) {
+      setSelectedThreadsAccount(JSON.parse(savedThreadsAccount))
+    }
+
     // Show token modal only if neither platform is connected
-    if (!savedFacebookToken && !savedInstagramToken) {
+    if (!savedFacebookToken && !savedInstagramToken && !savedPinterestToken && !savedThreadsToken) {
       setShowTokenModal(true)
     } else {
       setShowTokenModal(false)
     }
   }, [])
 
-  const initiateOAuth = (platform: "facebook" | "instagram") => {
-    console.log("TSM")
-    const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
-    if (!clientId) {
-      setError("Facebook App ID not configured")
-      return
-    }
-
-    const redirectUri = `${window.location.origin}/auth/${platform}/callback`
+  const initiateOAuth = (platform: "facebook" | "instagram" | "pinterest" | "threads") => {
+    let authUrl = ""
+    let clientId = ""
+    let redirectUri = ""
     let scope = ""
 
-    if (platform === "facebook") {
-      scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management"
-    } else {
-      scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement"
-    }
+    if (platform === "facebook" || platform === "instagram") {
+      clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || ""
+      if (!clientId) {
+        setError("Facebook App ID not configured")
+        return
+      }
 
-    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
+      redirectUri = `${window.location.origin}/auth/${platform}/callback`
+
+      if (platform === "facebook") {
+        scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management"
+      } else {
+        scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement"
+      }
+
+      authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
+    }
+    else if (platform === "pinterest") {
+      clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || ""
+      if (!clientId) {
+        setError("Pinterest App ID not configured")
+        return
+      }
+
+      redirectUri = `${window.location.origin}/auth/pinterest/callback`
+      scope = "boards:read,boards:write,pins:read,pins:write,user_accounts:read"
+
+      authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=pinterest`
+    }
+    else if (platform === "threads") {
+      // Threads uses Instagram Basic Display API for now
+      clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || ""
+      if (!clientId) {
+        setError("Facebook App ID not configured for Threads")
+        return
+      }
+
+      redirectUri = `${window.location.origin}/auth/threads/callback`
+      scope = "threads_basic,threads_content_publish"
+
+      authUrl = `https://www.threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=threads`
+    }
 
     // Open OAuth in popup
     const popup = window.open(authUrl, `${platform}_oauth`, "width=600,height=600,scrollbars=yes,resizable=yes")
@@ -293,11 +449,21 @@ export default function DashboardPage() {
             setIsFacebookTokenSet(true)
             fetchFacebookPages(savedToken)
             setSelectedPlatforms((prev) => [...prev, "facebook"])
-          } else {
+          } else if (platform === "instagram") {
             setInstagramAccessToken(savedToken)
             setIsInstagramTokenSet(true)
             fetchInstagramAccounts(savedToken)
             setSelectedPlatforms((prev) => [...prev, "instagram"])
+          } else if (platform === "pinterest") {
+            setPinterestAccessToken(savedToken)
+            setIsPinterestTokenSet(true)
+            fetchPinterestAccounts(savedToken)
+            setSelectedPlatforms((prev) => [...prev, "pinterest"])
+          } else if (platform === "threads") {
+            setThreadsAccessToken(savedToken)
+            setIsThreadsTokenSet(true)
+            fetchThreadsAccounts(savedToken)
+            setSelectedPlatforms((prev) => [...prev, "threads"])
           }
           setShowTokenModal(false)
           setShowPageModal(true)
@@ -397,6 +563,119 @@ export default function DashboardPage() {
     }
   }
 
+  const fetchPinterestAccounts = async (token: string) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // Get user account info
+      const userResponse = await fetch(`https://api.pinterest.com/v5/user_account`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch Pinterest user account")
+      }
+
+      const userData = await userResponse.json()
+
+      const account: PinterestAccount = {
+        id: userData.id,
+        username: userData.username,
+        full_name: userData.full_name,
+        profile_picture: userData.profile_image,
+      }
+
+      setPinterestAccounts([account])
+      setSelectedPinterestAccount(account)
+      localStorage.setItem("selected_pinterest_account", JSON.stringify(account))
+
+      // Fetch boards
+      const boardsResponse = await fetch(`https://api.pinterest.com/v5/boards?page_size=25`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (boardsResponse.ok) {
+        const boardsData = await boardsResponse.json()
+        setPinterestBoards(boardsData.items || [])
+
+        if (boardsData.items && boardsData.items.length > 0 && !selectedPinterestBoard) {
+          setSelectedPinterestBoard(boardsData.items[0])
+          localStorage.setItem("selected_pinterest_board", JSON.stringify(boardsData.items[0]))
+        }
+      }
+
+      // Fetch pins
+      fetchPinterestPins(token)
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch Pinterest account")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchThreadsAccounts = async (token: string) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // Threads API integration - using Instagram Business Account for now
+      const response = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token`)
+
+      if (response.ok) {
+        const data = await response.json()
+
+        // For each page, check if it has Threads capability
+        for (const page of data.data || []) {
+          try {
+            const threadsResponse = await fetch(
+              `https://graph.facebook.com/v18.0/${page.id}?fields=connected_instagram_account,threads_account&access_token=${page.access_token}`,
+            )
+
+            if (threadsResponse.ok) {
+              const threadsData = await threadsResponse.json()
+
+              if (threadsData.threads_account) {
+                const accountResponse = await fetch(
+                  `https://graph.facebook.com/v18.0/${threadsData.threads_account.id}?fields=id,username,name,profile_picture_url,followers_count&access_token=${page.access_token}`,
+                )
+
+                if (accountResponse.ok) {
+                  const accountData = await accountResponse.json()
+                  const threadsAccount: ThreadsAccount = {
+                    id: accountData.id,
+                    username: accountData.username,
+                    name: accountData.name,
+                    profile_picture_url: accountData.profile_picture_url,
+                    followers_count: accountData.followers_count,
+                  }
+
+                  setThreadsAccounts(prev => [...prev, threadsAccount])
+
+                  if (!selectedThreadsAccount) {
+                    setSelectedThreadsAccount(threadsAccount)
+                    localStorage.setItem("selected_threads_account", JSON.stringify(threadsAccount))
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.log("No Threads account for page:", page.name)
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch Threads accounts")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const fetchFacebookPagePosts = async (page: FacebookPage) => {
     setIsLoading(true)
     setError("")
@@ -446,6 +725,58 @@ export default function DashboardPage() {
       setInstagramPosts(data.data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch Instagram posts")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchPinterestPins = async (token: string) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch(`https://api.pinterest.com/v5/pins?page_size=10`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Pinterest pins")
+      }
+
+      const data = await response.json()
+      setPinterestPins(data.items || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch Pinterest pins")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchThreadsPosts = async (account: ThreadsAccount) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // Threads API endpoint for fetching posts
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${account.id}/threads?fields=id,text,media_url,timestamp,like_count,reply_count&limit=10&access_token=${facebookAccessToken}`,
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Threads posts")
+      }
+
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error.message)
+      }
+
+      setThreadsPosts(data.data || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch Threads posts")
     } finally {
       setIsLoading(false)
     }
@@ -614,6 +945,95 @@ export default function DashboardPage() {
     }
   }
 
+  const fetchPinterestInsights = async (account: PinterestAccount) => {
+    try {
+      // Pinterest Analytics API
+      const response = await fetch(`https://api.pinterest.com/v5/user_account/analytics?start_date=2024-01-01&end_date=2024-12-31&metric_types=IMPRESSION,ENGAGEMENT,CLICKTHROUGH,OUTBOUND_CLICK&app_types=ALL`, {
+        headers: {
+          'Authorization': `Bearer ${pinterestAccessToken}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+
+        const insights: PinterestInsights = {
+          pin_impressions: 0,
+          total_engagements: 0,
+          pin_clicks: 0,
+          outbound_clicks: 0,
+          follower_count: 0,
+          pin_count: pinterestPins.length,
+        }
+
+        // Process analytics data
+        data.all?.forEach((metric: any) => {
+          switch (metric.metric) {
+            case "IMPRESSION":
+              insights.pin_impressions = metric.value || 0
+              break
+            case "ENGAGEMENT":
+              insights.total_engagements = metric.value || 0
+              break
+            case "CLICKTHROUGH":
+              insights.pin_clicks = metric.value || 0
+              break
+            case "OUTBOUND_CLICK":
+              insights.outbound_clicks = metric.value || 0
+              break
+          }
+        })
+
+        setPinterestInsights(insights)
+      }
+    } catch (err) {
+      console.error("Failed to fetch Pinterest insights:", err)
+    }
+  }
+
+  const fetchThreadsInsights = async (account: ThreadsAccount) => {
+    try {
+      // Threads insights API
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${account.id}/insights?metric=impressions,reach,profile_views,follower_count,engagement&period=day&access_token=${facebookAccessToken}`,
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+
+        const insights: ThreadsInsights = {
+          impressions: 0,
+          reach: 0,
+          profile_views: 0,
+          follower_count: account.followers_count || 0,
+          engagement: 0,
+        }
+
+        data.data?.forEach((metric: any) => {
+          const value = metric.values?.[0]?.value || 0
+          switch (metric.name) {
+            case "impressions":
+              insights.impressions = value
+              break
+            case "reach":
+              insights.reach = value
+              break
+            case "profile_views":
+              insights.profile_views = value
+              break
+            case "engagement":
+              insights.engagement = value
+              break
+          }
+        })
+
+        setThreadsInsights(insights)
+      }
+    } catch (err) {
+      console.error("Failed to fetch Threads insights:", err)
+    }
+  }
+
   const fetchPostAnalytics = async (page: FacebookPage) => {
     try {
       const postsWithInsights = await Promise.all(
@@ -735,6 +1155,20 @@ export default function DashboardPage() {
       fetchInstagramInsights(selectedInstagramAccount)
     }
   }, [selectedInstagramAccount])
+
+  useEffect(() => {
+    if (selectedPinterestAccount) {
+      fetchPinterestPins(pinterestAccessToken)
+      fetchPinterestInsights(selectedPinterestAccount)
+    }
+  }, [selectedPinterestAccount])
+
+  useEffect(() => {
+    if (selectedThreadsAccount) {
+      fetchThreadsPosts(selectedThreadsAccount)
+      fetchThreadsInsights(selectedThreadsAccount)
+    }
+  }, [selectedThreadsAccount])
 
   useEffect(() => {
     if (selectedFacebookPage && facebookPosts.length > 0) {
@@ -883,7 +1317,10 @@ export default function DashboardPage() {
 
     // Calculate estimated time based on platforms and media
     let estimatedTime = "1-2 minutes"
-    if (postToFacebook && postToInstagram) {
+    const platformCount = [postToFacebook, postToInstagram, postToPinterest, postToThreads].filter(Boolean).length
+    if (platformCount > 2) {
+      estimatedTime = "3-5 minutes"
+    } else if (platformCount > 1) {
       estimatedTime = "2-4 minutes"
     }
     if (selectedFiles.length > 0) {
@@ -951,7 +1388,7 @@ export default function DashboardPage() {
         results.push("Facebook")
         console.log(" Facebook post completed")
 
-        currentProgress = postToInstagram ? 70 : 90
+        currentProgress += 15
         setPostingStatus({
           isPosting: true,
           message: "Facebook post complete!",
@@ -976,11 +1413,62 @@ export default function DashboardPage() {
         results.push("Instagram")
         console.log(" Instagram post completed")
 
+        currentProgress += 15
         setPostingStatus({
           isPosting: true,
           message: "Instagram post complete!",
-          progress: 95,
+          progress: currentProgress,
           currentStep: "Instagram Complete",
+          estimatedTime
+        })
+      }
+
+      // Post to Pinterest if selected
+      if (postToPinterest && selectedPinterestAccount && selectedPinterestBoard) {
+        setPostingStatus({
+          isPosting: true,
+          message: "Posting to Pinterest...",
+          progress: currentProgress,
+          currentStep: "Posting to Pinterest",
+          estimatedTime
+        })
+
+        console.log(" Posting to Pinterest...")
+        await postToPinterestBoard(fileUrls)
+        results.push("Pinterest")
+        console.log(" Pinterest post completed")
+
+        currentProgress += 15
+        setPostingStatus({
+          isPosting: true,
+          message: "Pinterest post complete!",
+          progress: currentProgress,
+          currentStep: "Pinterest Complete",
+          estimatedTime
+        })
+      }
+
+      // Post to Threads if selected
+      if (postToThreads && selectedThreadsAccount) {
+        setPostingStatus({
+          isPosting: true,
+          message: "Posting to Threads...",
+          progress: currentProgress,
+          currentStep: "Posting to Threads",
+          estimatedTime
+        })
+
+        console.log(" Posting to Threads...")
+        await postToThreadsAccount(fileUrls)
+        results.push("Threads")
+        console.log(" Threads post completed")
+
+        currentProgress += 15
+        setPostingStatus({
+          isPosting: true,
+          message: "Threads post complete!",
+          progress: currentProgress,
+          currentStep: "Threads Complete",
           estimatedTime
         })
       }
@@ -1005,6 +1493,9 @@ export default function DashboardPage() {
       setSelectedPlatforms([])
       setTaggedPeopleMap(new Map())
       setFileTypes([]) // Reset file types
+      setPinTitle("")
+      setPinDescription("")
+      setPinLink("")
 
       // Refresh posts with delay to allow for processing
       setTimeout(() => {
@@ -1013,6 +1504,12 @@ export default function DashboardPage() {
         }
         if (postToInstagram && selectedInstagramAccount) {
           fetchInstagramPosts(selectedInstagramAccount)
+        }
+        if (postToPinterest && selectedPinterestAccount) {
+          fetchPinterestPins(pinterestAccessToken)
+        }
+        if (postToThreads && selectedThreadsAccount) {
+          fetchThreadsPosts(selectedThreadsAccount)
         }
       }, 5000)
 
@@ -1487,6 +1984,140 @@ export default function DashboardPage() {
     }
   }
 
+  const postToPinterestBoard = async (fileUrls: string[]) => {
+    if (!selectedPinterestBoard || !selectedPinterestAccount || fileUrls.length === 0) return
+
+    try {
+      setPostingStatus(prev => ({
+        ...prev,
+        message: "Creating Pinterest pin..."
+      }))
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000) // 1 minute timeout
+
+      // Pinterest requires image URL, title, description, and board ID
+      const pinData = {
+        title: pinTitle || "My Pin",
+        description: pinDescription || postContent,
+        board_id: selectedPinterestBoard.id,
+        media_source: {
+          source_type: "image_url",
+          url: fileUrls[0] // Pinterest typically uses single image per pin
+        },
+        link: pinLink || undefined
+      }
+
+      const response = await fetch(`https://api.pinterest.com/v5/pins`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${pinterestAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(pinData),
+        signal: controller.signal
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ Pinterest pin creation failed:", errorData)
+        throw new Error(errorData.message || "Failed to create Pinterest pin")
+      }
+
+      const result = await response.json()
+      console.log("✅ Pinterest pin created:", result)
+
+      clearTimeout(timeoutId)
+    } catch (error) {
+      console.error("❌ Pinterest post failed:", error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error("Pinterest request timeout - please try again")
+      }
+      throw error
+    }
+  }
+
+  const postToThreadsAccount = async (fileUrls: string[]) => {
+    if (!selectedThreadsAccount) return
+
+    try {
+      setPostingStatus(prev => ({
+        ...prev,
+        message: "Posting to Threads..."
+      }))
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000) // 1 minute timeout
+
+      // Threads API for creating posts
+      let response
+
+      if (fileUrls.length > 0) {
+        // Threads post with media
+        const isVideo = fileTypes[0]?.startsWith("video/")
+        const mediaType = isVideo ? "video_url" : "image_url"
+
+        // Create media container first
+        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            [mediaType]: fileUrls[0],
+            caption: postContent,
+            access_token: facebookAccessToken,
+          }),
+          signal: controller.signal
+        })
+
+        if (!containerResponse.ok) {
+          const errorData = await containerResponse.json()
+          throw new Error(errorData.error?.message || "Failed to create Threads media container")
+        }
+
+        const containerResult = await containerResponse.json()
+
+        // Publish the media post
+        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            creation_id: containerResult.id,
+            access_token: facebookAccessToken,
+          }),
+          signal: controller.signal
+        })
+      } else {
+        // Text-only Threads post
+        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: postContent,
+            access_token: facebookAccessToken,
+          }),
+          signal: controller.signal
+        })
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ Threads post failed:", errorData)
+        throw new Error(errorData.error?.message || "Failed to post to Threads")
+      }
+
+      const result = await response.json()
+      console.log("✅ Threads post created:", result)
+
+      clearTimeout(timeoutId)
+    } catch (error) {
+      console.error("❌ Threads post failed:", error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error("Threads request timeout - please try again")
+      }
+      throw error
+    }
+  }
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
@@ -1494,7 +2125,7 @@ export default function DashboardPage() {
     // Reset previous errors
     setError("")
 
-    const maxFiles = postType === "carousel" ? 10 : 1
+    const maxFiles = postType === "carousel" ? 10 : postType === "pin" ? 1 : 1
     if (files.length > maxFiles) {
       setError(`Maximum ${maxFiles} files allowed for ${postType}`)
       return
@@ -1523,6 +2154,11 @@ export default function DashboardPage() {
       } else if (postType === "carousel") {
         if (!file.type.startsWith("image/")) {
           setError("Carousel posts require image files")
+          return
+        }
+      } else if (postType === "pin") {
+        if (!file.type.startsWith("image/")) {
+          setError("Pinterest pins require image files")
           return
         }
       } else {
@@ -1571,7 +2207,7 @@ export default function DashboardPage() {
 
   const validatePost = (): string | null => {
     // Platform selection validation
-    if (!postToFacebook && !postToInstagram) {
+    if (!postToFacebook && !postToInstagram && !postToPinterest && !postToThreads) {
       return "Please select at least one platform to post to"
     }
 
@@ -1582,6 +2218,18 @@ export default function DashboardPage() {
 
     if (postToInstagram && !selectedInstagramAccount) {
       return "Please select an Instagram account to post to"
+    }
+
+    if (postToPinterest && !selectedPinterestAccount) {
+      return "Please select a Pinterest account to post to"
+    }
+
+    if (postToPinterest && !selectedPinterestBoard) {
+      return "Please select a Pinterest board to post to"
+    }
+
+    if (postToThreads && !selectedThreadsAccount) {
+      return "Please select a Threads account to post to"
     }
 
     // Content validation based on platform and post type
@@ -1693,24 +2341,106 @@ export default function DashboardPage() {
       }
     }
 
-    // Cross-platform validations when posting to both
-    if (postToFacebook && postToInstagram) {
-      // When posting to both platforms, ensure compatibility
+    // Pinterest-specific validations
+    if (postToPinterest) {
+      // Pinterest requires media
+      if (!hasMedia) {
+        return "Pinterest pins require at least one image"
+      }
+
+      // Pinterest only supports images
+      if (selectedFiles.some(file => !file.type.startsWith("image/"))) {
+        return "Pinterest pins only support image files"
+      }
+
+      // Pinterest title validation
+      if (!pinTitle.trim()) {
+        return "Pinterest pins require a title"
+      }
+
+      if (pinTitle.length > 100) {
+        return "Pinterest pin titles cannot exceed 100 characters"
+      }
+
+      if (pinDescription.length > 500) {
+        return "Pinterest pin descriptions cannot exceed 500 characters"
+      }
+
+      // Pinterest only supports single images per pin
+      if (selectedFiles.length > 1) {
+        return "Pinterest pins can only have one image"
+      }
+    }
+
+    // Threads-specific validations
+    if (postToThreads) {
+      // Threads character limits
+      if (postContent.length > 500) {
+        return "Threads posts cannot exceed 500 characters"
+      }
+
+      if (isScheduled && scheduledDate) {
+        return "Threads does not support scheduled posts. Please post immediately."
+      }
+
+      // Threads media validation
+      if (hasMedia && selectedFiles.length > 1) {
+        return "Threads posts can only have one image or video"
+      }
+
+      if (hasMedia) {
+        const file = selectedFiles[0]
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+          return "Threads posts must be images or videos"
+        }
+      }
+    }
+
+    // Cross-platform validations when posting to multiple platforms
+    const selectedPlatforms = [
+      postToFacebook && "facebook",
+      postToInstagram && "instagram",
+      postToPinterest && "pinterest",
+      postToThreads && "threads"
+    ].filter(Boolean)
+
+    if (selectedPlatforms.length > 1) {
+      // When posting to multiple platforms, ensure compatibility
       if (postType === "carousel") {
-        // Both platforms support image carousels, but Facebook doesn't support video carousels
-        const hasVideos = selectedFiles.some((file) => file.type.startsWith("video/"))
-        if (hasVideos) {
-          return "When posting carousels to both platforms, only images are supported"
+        // Check if all platforms support carousels
+        if (postToPinterest) {
+          return "Pinterest does not support carousel posts. Please uncheck Pinterest or change post type."
+        }
+        if (postToThreads) {
+          return "Threads does not support carousel posts. Please uncheck Threads or change post type."
         }
       }
 
-      if (!hasMedia) {
-        return "When posting to both platforms, media is required (Instagram requirement)"
+      if (postType === "reel") {
+        // Check if all platforms support reels
+        if (postToPinterest) {
+          return "Pinterest does not support video reels. Please uncheck Pinterest or change post type."
+        }
       }
 
-      // Use the more restrictive character limit
-      if (postContent.length > 2200) {
-        return "When posting to both platforms, captions cannot exceed 2,200 characters (Instagram limit)"
+      if (postType === "pin") {
+        // Pinterest-specific post type
+        if (postToFacebook || postToInstagram || postToThreads) {
+          return "Pinterest pin post type can only be used for Pinterest. Please uncheck other platforms or change post type."
+        }
+      }
+
+      // Use the most restrictive character limit
+      if (postToInstagram && postContent.length > 2200) {
+        return "When posting to Instagram, captions cannot exceed 2,200 characters"
+      }
+      if (postToThreads && postContent.length > 500) {
+        return "When posting to Threads, text cannot exceed 500 characters"
+      }
+
+      // Media requirements
+      if ((postToInstagram || postToPinterest) && !hasMedia) {
+        return "When posting to Instagram or Pinterest, media is required"
       }
     }
 
@@ -1721,6 +2451,10 @@ export default function DashboardPage() {
     }
 
     // Scheduling validations
+    if (scheduledDate && (postToInstagram || postToPinterest || postToThreads)) {
+      return "Only Facebook supports scheduled posts. Please uncheck other platforms or post immediately."
+    }
+
     if (scheduledDate) {
       const now = new Date()
       const scheduled = new Date(scheduledDate)
@@ -1756,7 +2490,21 @@ export default function DashboardPage() {
       setSelectedPlatforms((prev) => [...prev, "instagram"])
     }
 
-    if (facebookAccessToken || instagramAccessToken) {
+    if (pinterestAccessToken) {
+      localStorage.setItem("pinterest_access_token", pinterestAccessToken)
+      setIsPinterestTokenSet(true)
+      fetchPinterestAccounts(pinterestAccessToken)
+      setSelectedPlatforms((prev) => [...prev, "pinterest"])
+    }
+
+    if (threadsAccessToken) {
+      localStorage.setItem("threads_access_token", threadsAccessToken)
+      setIsThreadsTokenSet(true)
+      fetchThreadsAccounts(threadsAccessToken)
+      setSelectedPlatforms((prev) => [...prev, "threads"])
+    }
+
+    if (facebookAccessToken || instagramAccessToken || pinterestAccessToken || threadsAccessToken) {
       setShowTokenModal(false)
     }
   }
@@ -1774,6 +2522,27 @@ export default function DashboardPage() {
     localStorage.setItem("selected_instagram_account", JSON.stringify(account))
     fetchInstagramPosts(account)
     fetchInstagramInsights(account)
+    setShowPageModal(false)
+  }
+
+  const handlePinterestSelection = (account: PinterestAccount) => {
+    setSelectedPinterestAccount(account)
+    localStorage.setItem("selected_pinterest_account", JSON.stringify(account))
+    fetchPinterestPins(pinterestAccessToken)
+    fetchPinterestInsights(account)
+    setShowPageModal(false)
+  }
+
+  const handlePinterestBoardSelection = (board: PinterestBoard) => {
+    setSelectedPinterestBoard(board)
+    localStorage.setItem("selected_pinterest_board", JSON.stringify(board))
+  }
+
+  const handleThreadsSelection = (account: ThreadsAccount) => {
+    setSelectedThreadsAccount(account)
+    localStorage.setItem("selected_threads_account", JSON.stringify(account))
+    fetchThreadsPosts(account)
+    fetchThreadsInsights(account)
     setShowPageModal(false)
   }
 
@@ -1799,14 +2568,41 @@ export default function DashboardPage() {
     alert("Instagram Disconnected")
   }
 
+  const disconnectPinterest = () => {
+    localStorage.removeItem("pinterest_access_token")
+    localStorage.removeItem("selected_pinterest_account")
+    localStorage.removeItem("selected_pinterest_board")
+    setPinterestAccessToken("")
+    setIsPinterestTokenSet(false)
+    setSelectedPinterestAccount(null)
+    setSelectedPinterestBoard(null)
+    setPinterestAccounts([])
+    setPinterestBoards([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "pinterest"))
+    alert("Pinterest Disconnected")
+  }
+
+  const disconnectThreads = () => {
+    localStorage.removeItem("threads_access_token")
+    localStorage.removeItem("selected_threads_account")
+    setThreadsAccessToken("")
+    setIsThreadsTokenSet(false)
+    setSelectedThreadsAccount(null)
+    setThreadsAccounts([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "threads"))
+    alert("Threads Disconnected")
+  }
+
   const getPostTypeHelperText = () => {
     if (postType === "post") {
-      if (postToFacebook && postToInstagram) {
-        return "Single image or video post to both platforms. Instagram requires media."
+      if (postToFacebook && postToInstagram && postToThreads) {
+        return "Single image or video post to multiple platforms. Instagram requires media."
       } else if (postToFacebook) {
         return "Text post with optional image or video for Facebook."
       } else if (postToInstagram) {
         return "Single image or video post for Instagram. Media is required."
+      } else if (postToThreads) {
+        return "Text post with optional image or video for Threads."
       }
     } else if (postType === "reel") {
       if (postToFacebook && postToInstagram) {
@@ -1824,6 +2620,8 @@ export default function DashboardPage() {
       } else if (postToInstagram) {
         return "2-10 images or videos for Instagram carousel."
       }
+    } else if (postType === "pin") {
+      return "Single image post for Pinterest with title and description."
     }
     return ""
   }
@@ -2161,18 +2959,116 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 )}
+                {selectedPinterestAccount && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
+                      <Share2 className="h-3 w-3 mr-1" />@{selectedPinterestAccount.username}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          <DropdownMenuLabel>Switch Pinterest Account</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {pinterestAccounts.map((account) => (
+                            <DropdownMenuItem
+                              key={account.id}
+                              onClick={() => handlePinterestSelection(account)}
+                              className={selectedPinterestAccount?.id === account.id ? "bg-red-50" : ""}
+                            >
+                              <div className="flex items-center gap-2">
+                                {account.profile_picture && (
+                                  <Image
+                                    src={account.profile_picture || "/placeholder.svg"}
+                                    alt={account.username}
+                                    width={16}
+                                    height={16}
+                                    className="h-4 w-4 rounded-full"
+                                  />
+                                )}
+                                <span className="truncate">@{account.username}</span>
+                                {selectedPinterestAccount?.id === account.id && (
+                                  <Check className="h-3 w-3 ml-auto text-green-600" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
+                        onClick={disconnectPinterest}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  </div>
+                )}
+                {selectedThreadsAccount && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-black text-white border-black">
+                      <MessageCircle className="h-3 w-3 mr-1" />@{selectedThreadsAccount.username}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          <DropdownMenuLabel>Switch Threads Account</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {threadsAccounts.map((account) => (
+                            <DropdownMenuItem
+                              key={account.id}
+                              onClick={() => handleThreadsSelection(account)}
+                              className={selectedThreadsAccount?.id === account.id ? "bg-gray-100" : ""}
+                            >
+                              <div className="flex items-center gap-2">
+                                {account.profile_picture_url && (
+                                  <Image
+                                    src={account.profile_picture_url || "/placeholder.svg"}
+                                    alt={account.username}
+                                    width={16}
+                                    height={16}
+                                    className="h-4 w-4 rounded-full"
+                                  />
+                                )}
+                                <span className="truncate">@{account.username}</span>
+                                {selectedThreadsAccount?.id === account.id && (
+                                  <Check className="h-3 w-3 ml-auto text-green-600" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
+                        onClick={disconnectThreads}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setShowPageModal(true)}
                   title="Select Pages"
                 >
                   <Users className="h-4 w-4 mr-2" />
-                  Select Pages
+                  Select Accounts
                 </Button>
               </div>
               <Button
                 onClick={() => setShowPostModal(true)}
-                disabled={!isFacebookTokenSet && !isInstagramTokenSet || postingStatus.isPosting}
+                disabled={!isFacebookTokenSet && !isInstagramTokenSet && !isPinterestTokenSet && !isThreadsTokenSet || postingStatus.isPosting}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Post
@@ -2190,7 +3086,7 @@ export default function DashboardPage() {
         <div className="space-y-8">
           <div className="space-y-2">
             <h2 className="text-3xl font-bold font-serif">Social Media Dashboard</h2>
-            <p className="text-muted-foreground">Manage your Facebook and Instagram presence from one place.</p>
+            <p className="text-muted-foreground">Manage your Facebook, Instagram, Pinterest, and Threads presence from one place.</p>
           </div>
 
           {error && (
@@ -2220,10 +3116,13 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_fans || 0) + (instagramInsights?.follower_count || 0)}
+                      {(facebookInsights?.page_fans || 0) +
+                        (instagramInsights?.follower_count || 0) +
+                        (pinterestInsights?.follower_count || 0) +
+                        (threadsInsights?.follower_count || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0}
+                      FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0} | PIN: {pinterestInsights?.follower_count || 0} | TH: {threadsInsights?.follower_count || 0}
                     </p>
                   </CardContent>
                 </Card>
@@ -2235,10 +3134,13 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_impressions || 0) + (instagramInsights?.impressions || 0)}
+                      {(facebookInsights?.page_impressions || 0) +
+                        (instagramInsights?.impressions || 0) +
+                        (pinterestInsights?.pin_impressions || 0) +
+                        (threadsInsights?.impressions || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0}
+                      FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0} | PIN: {pinterestInsights?.pin_impressions || 0} | TH: {threadsInsights?.impressions || 0}
                     </p>
                   </CardContent>
                 </Card>
@@ -2250,10 +3152,12 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_engaged_users || 0) + (instagramInsights?.reach || 0)}
+                      {(facebookInsights?.page_engaged_users || 0) +
+                        (instagramInsights?.reach || 0) +
+                        (threadsInsights?.reach || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_engaged_users || 0} | IG: {instagramInsights?.reach || 0}
+                      FB: {facebookInsights?.page_engaged_users || 0} | IG: {instagramInsights?.reach || 0} | TH: {threadsInsights?.reach || 0}
                     </p>
                   </CardContent>
                 </Card>
@@ -2264,9 +3168,11 @@ export default function DashboardPage() {
                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{facebookPosts.length + instagramPosts.length}</div>
+                    <div className="text-2xl font-bold">
+                      {facebookPosts.length + instagramPosts.length + pinterestPins.length + threadsPosts.length}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookPosts.length} | IG: {instagramPosts.length}
+                      FB: {facebookPosts.length} | IG: {instagramPosts.length} | PIN: {pinterestPins.length} | TH: {threadsPosts.length}
                     </p>
                   </CardContent>
                 </Card>
@@ -2275,7 +3181,7 @@ export default function DashboardPage() {
 
             <TabsContent value="analytics" className="space-y-6">
               <Tabs value={analyticsTab} onValueChange={setAnalyticsTab}>
-                <TabsList>
+                <TabsList className="flex overflow-x-auto">
                   <TabsTrigger value="facebook" disabled={!isFacebookTokenSet}>
                     <Facebook className="h-4 w-4 mr-2" />
                     Facebook
@@ -2283,6 +3189,14 @@ export default function DashboardPage() {
                   <TabsTrigger value="instagram" disabled={!isInstagramTokenSet}>
                     <Instagram className="h-4 w-4 mr-2" />
                     Instagram
+                  </TabsTrigger>
+                  <TabsTrigger value="pinterest" disabled={!isPinterestTokenSet}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Pinterest
+                  </TabsTrigger>
+                  <TabsTrigger value="threads" disabled={!isThreadsTokenSet}>
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Threads
                   </TabsTrigger>
                 </TabsList>
 
@@ -2383,6 +3297,124 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </TabsContent>
+
+                <TabsContent value="pinterest">
+                  {selectedPinterestAccount && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Username</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedPinterestAccount.username}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Boards</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{pinterestBoards.length}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                  {pinterestInsights && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Pin Impressions</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{pinterestInsights.pin_impressions}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Total Engagements</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{pinterestInsights.total_engagements}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Pin Clicks</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{pinterestInsights.pin_clicks}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Outbound Clicks</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{pinterestInsights.outbound_clicks}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="threads">
+                  {selectedThreadsAccount && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Username</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedThreadsAccount.username}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Followers</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedThreadsAccount.followers_count}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                  {threadsInsights && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Impressions</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{threadsInsights.impressions}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Reach</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{threadsInsights.reach}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Profile Views</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{threadsInsights.profile_views}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Engagement</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{threadsInsights.engagement}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </TabsContent>
               </Tabs>
             </TabsContent>
 
@@ -2456,9 +3488,78 @@ export default function DashboardPage() {
                   </div>
                 )}
 
+                {/* Pinterest Pins */}
+                {isPinterestTokenSet && pinterestPins.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Share2 className="h-5 w-5 text-red-600" />
+                      Pinterest Pins
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {pinterestPins.map((pin) => (
+                        <Card key={pin.id}>
+                          <CardContent className="p-4">
+                            {pin.images && (
+                              <img
+                                src={Object.values(pin.images)[0]?.url || "/placeholder.svg"}
+                                alt="Pin"
+                                className="w-full h-48 object-cover rounded-lg mb-3"
+                              />
+                            )}
+                            <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
+                            <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>❤️ {pin.like_count || 0}</span>
+                              <span>💬 {pin.comment_count || 0}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-2">
+                              {new Date(pin.created_at).toLocaleDateString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Threads Posts */}
+                {isThreadsTokenSet && threadsPosts.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <MessageCircle className="h-5 w-5 text-black" />
+                      Threads Posts
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {threadsPosts.map((post) => (
+                        <Card key={post.id}>
+                          <CardContent className="p-4">
+                            {post.media_url && (
+                              <img
+                                src={post.media_url}
+                                alt="Post"
+                                className="w-full h-48 object-cover rounded-lg mb-3"
+                              />
+                            )}
+                            <p className="text-sm text-gray-600 mb-2">{post.text || "No text"}</p>
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>❤️ {post.like_count || 0}</span>
+                              <span>💬 {post.reply_count || 0}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-2">
+                              {new Date(post.timestamp).toLocaleDateString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* No posts message */}
                 {(!isFacebookTokenSet || facebookPosts.length === 0) &&
-                  (!isInstagramTokenSet || instagramPosts.length === 0) && (
+                  (!isInstagramTokenSet || instagramPosts.length === 0) &&
+                  (!isPinterestTokenSet || pinterestPins.length === 0) &&
+                  (!isThreadsTokenSet || threadsPosts.length === 0) && (
                     <div className="text-center py-12">
                       <p className="text-gray-500">No posts available. Connect your accounts to see posts.</p>
                     </div>
@@ -2474,7 +3575,7 @@ export default function DashboardPage() {
           <DialogHeader>
             <DialogTitle>Connect Your Social Media Accounts</DialogTitle>
             <DialogDescription>
-              Connect your Facebook and Instagram accounts to start managing your social media.
+              Connect your social media accounts to start managing your presence across platforms.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -2496,7 +3597,25 @@ export default function DashboardPage() {
               Connect Instagram
             </Button>
 
-            <div className="text-center text-sm text-muted-foreground">You can connect one or both platforms</div>
+            <Button
+              onClick={() => initiateOAuth("pinterest")}
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              disabled={isLoading}
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Connect Pinterest
+            </Button>
+
+            <Button
+              onClick={() => initiateOAuth("threads")}
+              className="w-full bg-black hover:bg-gray-800 text-white"
+              disabled={isLoading}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Connect Threads
+            </Button>
+
+            <div className="text-center text-sm text-muted-foreground">You can connect one or multiple platforms</div>
           </div>
         </DialogContent>
       </Dialog>
@@ -2513,7 +3632,7 @@ export default function DashboardPage() {
 
             <div className="space-y-2">
               <Label>Post Type</Label>
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 flex-wrap gap-2">
                 <Button
                   variant={postType === "post" ? "default" : "outline"}
                   size="sm"
@@ -2547,13 +3666,24 @@ export default function DashboardPage() {
                 >
                   Carousel
                 </Button>
+                <Button
+                  variant={postType === "pin" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setPostType("pin")
+                    setSelectedFiles([])
+                    setFilePreviews([])
+                  }}
+                >
+                  Pinterest Pin
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">{getPostTypeHelperText()}</p>
             </div>
 
             <div className="space-y-2">
               <Label>Platform Selection</Label>
-              <div className="flex space-x-4">
+              <div className="flex space-x-4 flex-wrap gap-2">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="facebook"
@@ -2580,11 +3710,113 @@ export default function DashboardPage() {
                     <span>Instagram</span>
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="pinterest"
+                    checked={postToPinterest}
+                    // @ts-ignore
+                    onCheckedChange={setPostToPinterest}
+                    disabled={!selectedPinterestAccount || !selectedPinterestBoard}
+                  />
+                  <Label htmlFor="pinterest" className="flex items-center space-x-2">
+                    <Share2 className="h-4 w-4 text-red-600" />
+                    <span>Pinterest</span>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="threads"
+                    checked={postToThreads}
+                    // @ts-ignore
+                    onCheckedChange={setPostToThreads}
+                    disabled={!selectedThreadsAccount}
+                  />
+                  <Label htmlFor="threads" className="flex items-center space-x-2">
+                    <MessageCircle className="h-4 w-4 text-black" />
+                    <span>Threads</span>
+                  </Label>
+                </div>
               </div>
             </div>
 
+            {/* Pinterest-specific fields */}
+            {postToPinterest && postType === "pin" && (
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/50">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Share2 className="h-4 w-4 text-red-600" />
+                  Pinterest Pin Details
+                </h4>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pin-title">Pin Title *</Label>
+                  <Input
+                    id="pin-title"
+                    placeholder="Enter pin title..."
+                    value={pinTitle}
+                    onChange={(e) => setPinTitle(e.target.value)}
+                    maxLength={100}
+                  />
+                  <p className="text-xs text-muted-foreground">{pinTitle.length}/100 characters</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pin-description">Pin Description</Label>
+                  <Textarea
+                    id="pin-description"
+                    placeholder="Describe your pin..."
+                    value={pinDescription}
+                    onChange={(e) => setPinDescription(e.target.value)}
+                    maxLength={500}
+                  />
+                  <p className="text-xs text-muted-foreground">{pinDescription.length}/500 characters</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="pin-link">Link (Optional)</Label>
+                  <Input
+                    id="pin-link"
+                    placeholder="https://example.com"
+                    value={pinLink}
+                    onChange={(e) => setPinLink(e.target.value)}
+                    type="url"
+                  />
+                </div>
+
+                {selectedPinterestBoard && (
+                  <div className="space-y-2">
+                    <Label>Selected Board</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start">
+                          {selectedPinterestBoard.name}
+                          <ChevronDown className="ml-auto h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-full">
+                        {pinterestBoards.map((board) => (
+                          <DropdownMenuItem
+                            key={board.id}
+                            onClick={() => handlePinterestBoardSelection(board)}
+                          >
+                            {board.name}
+                            {selectedPinterestBoard?.id === board.id && (
+                              <Check className="ml-auto h-4 w-4" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="post-content">{postType === "reel" ? "Video Description" : "Post Content"}</Label>
+              <Label htmlFor="post-content">
+                {postType === "reel" ? "Video Description" :
+                  postType === "pin" ? "Pin Description (optional)" :
+                    "Post Content"}
+              </Label>
               <div className="relative">
                 <Textarea
                   ref={textareaRef}
@@ -2594,7 +3826,9 @@ export default function DashboardPage() {
                       ? "Describe your reel... (Type @ to mention people)"
                       : postType === "carousel"
                         ? "Caption for your carousel... (Type @ to mention people)"
-                        : "What's on your mind? (Type @ to mention people)"
+                        : postType === "pin"
+                          ? "Additional description for your pin... (Type @ to mention people)"
+                          : "What's on your mind? (Type @ to mention people)"
                   }
                   value={postContent}
                   onChange={handleCaptionChange}
@@ -2681,13 +3915,19 @@ export default function DashboardPage() {
               </div>
               <div className="flex justify-between text-sm text-muted-foreground mt-1">
                 <span>
-                  {postContent.length}/{selectedPlatforms.includes("instagram") ? "2,200" : "63,206"} characters
+                  {postContent.length}/
+                  {postToThreads ? "500" :
+                    postToInstagram ? "2,200" :
+                      "63,206"} characters
                 </span>
                 <span className="text-xs">
-                  {selectedPlatforms.includes("instagram") && postContent.length > 2200 && (
+                  {postToThreads && postContent.length > 500 && (
+                    <span className="text-red-500">Threads limit exceeded</span>
+                  )}
+                  {postToInstagram && postContent.length > 2200 && (
                     <span className="text-red-500">Instagram limit exceeded</span>
                   )}
-                  {selectedPlatforms.includes("facebook") && postContent.length > 63206 && (
+                  {postToFacebook && postContent.length > 63206 && (
                     <span className="text-red-500">Facebook limit exceeded</span>
                   )}
                 </span>
@@ -2700,14 +3940,19 @@ export default function DashboardPage() {
                   ? "Video (Required)"
                   : postType === "carousel"
                     ? "Images (2-10 required)"
-                    : "Media (Optional)"}
+                    : postType === "pin"
+                      ? "Image (Required)"
+                      : "Media (Optional)"}
               </Label>
               <div className="flex items-center space-x-2">
                 <Input
                   ref={fileInputRef}
                   id="media-upload"
                   type="file"
-                  accept={postType === "reel" ? "video/*" : postType === "carousel" ? "image/*" : "image/*,video/*"}
+                  accept={postType === "reel" ? "video/*" :
+                    postType === "carousel" ? "image/*" :
+                      postType === "pin" ? "image/*" :
+                        "image/*,video/*"}
                   multiple={postType === "carousel"}
                   onChange={handleFileSelect}
                   className="flex-1"
@@ -2731,7 +3976,9 @@ export default function DashboardPage() {
                   ? "You can select multiple images (2-10) by holding Ctrl/Cmd and clicking, or by dragging and dropping"
                   : postType === "reel"
                     ? "Select one video file"
-                    : "Select one image or video file"}
+                    : postType === "pin"
+                      ? "Select one image file for your pin"
+                      : "Select one image or video file"}
               </p>
 
               {filePreviews.length > 0 && (
@@ -2769,7 +4016,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {postToFacebook && !postToInstagram && (
+            {postToFacebook && !postToInstagram && !postToPinterest && !postToThreads && (
               <>
                 <div className="flex items-center space-x-2">
                   {/* @ts-ignore */}
@@ -2802,9 +4049,9 @@ export default function DashboardPage() {
               </>
             )}
 
-            {postToInstagram && isScheduled && (
+            {(postToInstagram || postToPinterest || postToThreads) && isScheduled && (
               <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
-                Instagram does not support scheduled posts. Uncheck Instagram to schedule to Facebook only.
+                Only Facebook supports scheduled posts. Uncheck other platforms to schedule to Facebook only.
               </div>
             )}
 
@@ -2824,12 +4071,12 @@ export default function DashboardPage() {
                 ) : isScheduled ? (
                   <>
                     <Calendar className="h-4 w-4 mr-2" />
-                    Schedule {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : "Post"}
+                    Schedule {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : postType === "pin" ? "Pin" : "Post"}
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Post {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : "Now"}
+                    Post {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : postType === "pin" ? "Pin" : "Now"}
                   </>
                 )}
               </Button>
@@ -2839,57 +4086,182 @@ export default function DashboardPage() {
       </Dialog>
 
       <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Select Your Accounts</DialogTitle>
             <DialogDescription>Choose which accounts to use for posting and analytics.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6 max-h-[60vh] overflow-y-auto">
             {facebookPages.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Instagram className="h-4 w-4 text-pink-600" />
-                  Instagram Accounts
-                </Label>
-                {instagramAccounts.map((account) => (
-                  <Button
-                    key={account.id}
-                    variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
-                    className="w-full justify-start"
-                    onClick={() => handleInstagramSelection(account)}
-                  >
-                    {account.profile_picture_url && (
-                      <Image
-                        src={account.profile_picture_url || "/placeholder.svg"}
-                        alt={account.username}
-                        width={20}
-                        height={20}
-                        className="h-5 w-5 rounded-full mr-2"
-                      />
-                    )}
-                    @{account.username}
-                    {selectedInstagramAccount?.id === account.id && <span className="ml-auto text-green-600">✓</span>}
-                  </Button>
-                ))}
-              </div>
-            )}
-            {facebookPages.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Facebook className="h-4 w-4 text-blue-600" />
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base">
+                  <Facebook className="h-5 w-5 text-blue-600" />
                   Facebook Pages
                 </Label>
-                {facebookPages.map((page) => (
-                  <Button
-                    key={page.id}
-                    variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
-                    className="w-full justify-start"
-                    onClick={() => handlePageSelection(page)}
-                  >
-                    {page.name}
-                    {selectedFacebookPage?.id === page.id && <span className="ml-auto text-green-600">✓</span>}
-                  </Button>
-                ))}
+                <div className="grid gap-2">
+                  {facebookPages.map((page) => (
+                    <Button
+                      key={page.id}
+                      variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => handlePageSelection(page)}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        {page.picture?.data?.url && (
+                          <Image
+                            src={page.picture.data.url || "/placeholder.svg"}
+                            alt={page.name}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full"
+                          />
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">{page.name}</div>
+                        </div>
+                        {selectedFacebookPage?.id === page.id && (
+                          <Check className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {instagramAccounts.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base">
+                  <Instagram className="h-5 w-5 text-pink-600" />
+                  Instagram Accounts
+                </Label>
+                <div className="grid gap-2">
+                  {instagramAccounts.map((account) => (
+                    <Button
+                      key={account.id}
+                      variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => handleInstagramSelection(account)}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        {account.profile_picture_url && (
+                          <Image
+                            src={account.profile_picture_url || "/placeholder.svg"}
+                            alt={account.username}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full"
+                          />
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">@{account.username}</div>
+                          <div className="text-sm text-muted-foreground">{account.name}</div>
+                        </div>
+                        {selectedInstagramAccount?.id === account.id && (
+                          <Check className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pinterestAccounts.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base">
+                  <Share2 className="h-5 w-5 text-red-600" />
+                  Pinterest Accounts
+                </Label>
+                <div className="grid gap-2">
+                  {pinterestAccounts.map((account) => (
+                    <Button
+                      key={account.id}
+                      variant={selectedPinterestAccount?.id === account.id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => handlePinterestSelection(account)}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        {account.profile_picture && (
+                          <Image
+                            src={account.profile_picture || "/placeholder.svg"}
+                            alt={account.username}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full"
+                          />
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">@{account.username}</div>
+                          <div className="text-sm text-muted-foreground">{account.full_name}</div>
+                        </div>
+                        {selectedPinterestAccount?.id === account.id && (
+                          <Check className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+
+                {selectedPinterestAccount && pinterestBoards.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <Label className="text-sm">Select Board for Pins</Label>
+                    <div className="grid gap-2">
+                      {pinterestBoards.map((board) => (
+                        <Button
+                          key={board.id}
+                          variant={selectedPinterestBoard?.id === board.id ? "default" : "outline"}
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => handlePinterestBoardSelection(board)}
+                        >
+                          {board.name}
+                          {selectedPinterestBoard?.id === board.id && (
+                            <Check className="ml-auto h-4 w-4" />
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {threadsAccounts.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base">
+                  <MessageCircle className="h-5 w-5 text-black" />
+                  Threads Accounts
+                </Label>
+                <div className="grid gap-2">
+                  {threadsAccounts.map((account) => (
+                    <Button
+                      key={account.id}
+                      variant={selectedThreadsAccount?.id === account.id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => handleThreadsSelection(account)}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        {account.profile_picture_url && (
+                          <Image
+                            src={account.profile_picture_url || "/placeholder.svg"}
+                            alt={account.username}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full"
+                          />
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">@{account.username}</div>
+                          <div className="text-sm text-muted-foreground">{account.name}</div>
+                        </div>
+                        {selectedThreadsAccount?.id === account.id && (
+                          <Check className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
