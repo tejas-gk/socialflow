@@ -6,13 +6,13 @@ export async function POST(request: NextRequest) {
 
         const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
         const clientSecret = process.env.FACEBOOK_APP_SECRET
-        const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
+        const redirectUri = process.env.THREAD_REDIRECT_URI;
 
         if (!clientId || !clientSecret) {
             return NextResponse.json({ error: "Facebook app credentials not configured" }, { status: 500 })
         }
 
-        // Exchange code for access token (Instagram uses Facebook OAuth)
+        // Exchange code for access token (Threads uses Facebook Graph API)
         const tokenResponse = await fetch(
             `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${clientSecret}&code=${code}`,
         )
@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
             expires_in: longLivedData.expires_in,
         })
     } catch (error) {
-        console.error("Instagram OAuth error:", error)
+        console.error("Threads OAuth error:", error)
         return NextResponse.json({ error: "Authentication failed" }, { status: 500 })
     }
 }
+

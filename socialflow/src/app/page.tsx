@@ -409,19 +409,23 @@ export default function DashboardPage() {
       authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
     }
     else if (platform === "pinterest") {
-      clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || ""
+      clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || "";
       if (!clientId) {
-        setError("Pinterest App ID not configured")
-        return
+        setError("Pinterest Client ID not configured");
+        return;
       }
 
-      redirectUri = `${window.location.origin}/auth/pinterest/callback`
-      scope = "boards:read,boards:write,pins:read,pins:write,user_accounts:read"
+      redirectUri = `${window.location.origin}/auth/pinterest/callback`;
+      scope = "read_users,read_pins,write_pins";
 
-      authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=pinterest`
+      authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+        redirectUri
+      )}&scope=${encodeURIComponent(
+        scope
+      )}&response_type=code&state=pinterest`;
     }
     else if (platform === "threads") {
-      // Threads uses Instagram Basic Display API for now
+      // Threads uses Facebook Graph API
       clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || ""
       if (!clientId) {
         setError("Facebook App ID not configured for Threads")
@@ -431,7 +435,7 @@ export default function DashboardPage() {
       redirectUri = `${window.location.origin}/auth/threads/callback`
       scope = "threads_basic,threads_content_publish"
 
-      authUrl = `https://www.threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=threads`
+      authUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=threads`
     }
 
     // Open OAuth in popup
