@@ -416,8 +416,7 @@ export default function DashboardPage() {
       }
 
       redirectUri = `${window.location.origin}/auth/pinterest/callback`;
-      scope = "read_users,read_pins,write_pins";
-
+      scope = "user_accounts:read,boards:read,boards:write,pins:read,pins:write";
       authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(
         redirectUri
       )}&scope=${encodeURIComponent(
@@ -572,8 +571,8 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      // Get user account info
-      const userResponse = await fetch(`https://api.pinterest.com/v5/user_account`, {
+      // UPDATED: Call your local proxy instead of api.pinterest.com
+      const userResponse = await fetch(`/api/pinterest/proxy?endpoint=/user_account`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -596,8 +595,8 @@ export default function DashboardPage() {
       setSelectedPinterestAccount(account)
       localStorage.setItem("selected_pinterest_account", JSON.stringify(account))
 
-      // Fetch boards
-      const boardsResponse = await fetch(`https://api.pinterest.com/v5/boards?page_size=25`, {
+      // UPDATED: Fetch boards via proxy
+      const boardsResponse = await fetch(`/api/pinterest/proxy?endpoint=/boards&params=page_size=25`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -739,7 +738,8 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      const response = await fetch(`https://api.pinterest.com/v5/pins?page_size=10`, {
+      // UPDATED: Call proxy for pins
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/pins&params=page_size=10`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -951,8 +951,21 @@ export default function DashboardPage() {
 
   const fetchPinterestInsights = async (account: PinterestAccount) => {
     try {
-      // Pinterest Analytics API
-      const response = await fetch(`https://api.pinterest.com/v5/user_account/analytics?start_date=2024-01-01&end_date=2024-12-31&metric_types=IMPRESSION,ENGAGEMENT,CLICKTHROUGH,OUTBOUND_CLICK&app_types=ALL`, {
+      // Create dynamic dates for the last 30 days
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Build the query parameters
+      // 1. CHANGED: Replaced "CLICKTHROUGH" with "PIN_CLICK"
+      const queryParams = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        metric_types: "IMPRESSION,ENGAGEMENT,PIN_CLICK,OUTBOUND_CLICK",
+        app_types: "ALL"
+      });
+
+      // Call your local proxy
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/user_account/analytics&params=${encodeURIComponent(queryParams.toString())}`, {
         headers: {
           'Authorization': `Bearer ${pinterestAccessToken}`
         }
@@ -970,31 +983,24 @@ export default function DashboardPage() {
           pin_count: pinterestPins.length,
         }
 
-        // Process analytics data
-        data.all?.forEach((metric: any) => {
-          switch (metric.metric) {
-            case "IMPRESSION":
-              insights.pin_impressions = metric.value || 0
-              break
-            case "ENGAGEMENT":
-              insights.total_engagements = metric.value || 0
-              break
-            case "CLICKTHROUGH":
-              insights.pin_clicks = metric.value || 0
-              break
-            case "OUTBOUND_CLICK":
-              insights.outbound_clicks = metric.value || 0
-              break
-          }
-        })
+        // Map the summary metrics if available
+        if (data.summary?.metrics) {
+          insights.pin_impressions = data.summary.metrics.IMPRESSION || 0;
+          insights.total_engagements = data.summary.metrics.ENGAGEMENT || 0;
+          // 2. CHANGED: Map data.summary.metrics.PIN_CLICK to your state
+          insights.pin_clicks = data.summary.metrics.PIN_CLICK || 0;
+          insights.outbound_clicks = data.summary.metrics.OUTBOUND_CLICK || 0;
+        }
 
         setPinterestInsights(insights)
+      } else {
+        const errorData = await response.json(); // Parse JSON error to see details
+        console.error("Pinterest analytics error:", errorData);
       }
     } catch (err) {
       console.error("Failed to fetch Pinterest insights:", err)
     }
   }
-
   const fetchThreadsInsights = async (account: ThreadsAccount) => {
     try {
       // Threads insights API
@@ -1988,6 +1994,8 @@ export default function DashboardPage() {
     }
   }
 
+  // In src/app/page.tsx
+
   const postToPinterestBoard = async (fileUrls: string[]) => {
     if (!selectedPinterestBoard || !selectedPinterestAccount || fileUrls.length === 0) return
 
@@ -2012,7 +2020,8 @@ export default function DashboardPage() {
         link: pinLink || undefined
       }
 
-      const response = await fetch(`https://api.pinterest.com/v5/pins`, {
+      // UPDATED: Call your local proxy instead of the direct API URL
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/pins`, {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${pinterestAccessToken}`,
@@ -3677,6 +3686,12 @@ export default function DashboardPage() {
                     setPostType("pin")
                     setSelectedFiles([])
                     setFilePreviews([])
+
+                    // Add these lines to auto-switch platforms
+                    setPostToFacebook(false)
+                    setPostToInstagram(false)
+                    setPostToThreads(false)
+                    setPostToPinterest(true)
                   }}
                 >
                   Pinterest Pin
