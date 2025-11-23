@@ -1,50 +1,62 @@
+// src/app/api/auth/threads/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
     try {
         const { code } = await request.json()
 
-        const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
-        const clientSecret = process.env.FACEBOOK_APP_SECRET
+        const clientId = process.env.NEXT_PUBLIC_THREADS_APP_ID
+        const clientSecret = process.env.THREADS_APP_SECRET
         const redirectUri = process.env.THREAD_REDIRECT_URI;
 
-        if (!clientId || !clientSecret) {
-            return NextResponse.json({ error: "Facebook app credentials not configured" }, { status: 500 })
+        // Debug logging to verify values are loaded
+        console.log("Threads Auth Debug:", {
+            hasClientId: !!clientId,
+            hasClientSecret: !!clientSecret,
+            redirectUri: redirectUri, // Check if this matches your browser URL exactly
+        });
+
+        if (!clientId || !clientSecret || !redirectUri) {
+            console.error("Missing Threads credentials in .env");
+            return NextResponse.json({ error: "Threads app credentials not configured" }, { status: 500 })
         }
 
-        // Exchange code for access token (Threads uses Facebook Graph API)
         const tokenResponse = await fetch(
-            `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${clientSecret}&code=${code}`,
+            `https://graph.threads.net/oauth/access_token`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    grant_type: "authorization_code",
+                    redirect_uri: redirectUri,
+                    code: code,
+                }),
+            }
         )
 
         if (!tokenResponse.ok) {
-            throw new Error("Failed to exchange code for token")
+            // This line is crucial: it gets the actual error message from Threads
+            const errorText = await tokenResponse.text();
+            console.error("❌ Threads Token Exchange Failed. Response:", errorText);
+            throw new Error(`Threads API Error: ${errorText}`);
         }
 
         const tokenData = await tokenResponse.json()
 
-        if (tokenData.error) {
-            throw new Error(tokenData.error.message)
-        }
-
-        // Exchange short-lived token for long-lived token
-        const longLivedResponse = await fetch(
-            `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${tokenData.access_token}`,
-        )
-
-        if (!longLivedResponse.ok) {
-            throw new Error("Failed to get long-lived token")
-        }
-
-        const longLivedData = await longLivedResponse.json()
-
         return NextResponse.json({
-            access_token: longLivedData.access_token,
-            expires_in: longLivedData.expires_in,
+            access_token: tokenData.access_token,
+            user_id: tokenData.user_id,
+            expires_in: 0,
         })
     } catch (error) {
-        console.error("Threads OAuth error:", error)
-        return NextResponse.json({ error: "Authentication failed" }, { status: 500 })
+        console.error("Threads OAuth error handler:", error)
+        // Return the actual error message to the frontend
+        return NextResponse.json({
+            error: error instanceof Error ? error.message : "Authentication failed"
+        }, { status: 500 })
     }
 }
-

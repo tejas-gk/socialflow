@@ -261,7 +261,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [analyticsTab, setAnalyticsTab] = useState("facebook")
 
-  const [postToFacebook, setPostToFacebook] = useState(true)
+  const [postToFacebook, setPostToFacebook] = useState(false)
   const [postToInstagram, setPostToInstagram] = useState(false)
   const [postToPinterest, setPostToPinterest] = useState(false)
   const [postToThreads, setPostToThreads] = useState(false)
@@ -432,16 +432,16 @@ export default function DashboardPage() {
     }
     else if (platform === "threads") {
       // Threads uses Facebook Graph API
-      clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || ""
+      clientId = process.env.NEXT_PUBLIC_THREADS_APP_ID || ""
       if (!clientId) {
-        setError("Facebook App ID not configured for Threads")
+        setError("Threads App ID not configured")
         return
       }
 
       redirectUri = `${window.location.origin}/auth/threads/callback`
       scope = "threads_basic,threads_content_publish"
 
-      authUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=threads`
+      authUrl = `https://threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`
     }
 
     // Open OAuth in popup
@@ -629,55 +629,37 @@ export default function DashboardPage() {
     }
   }
 
+  // In src/app/page.tsx
+
   const fetchThreadsAccounts = async (token: string) => {
     setIsLoading(true)
     setError("")
 
     try {
-      // Threads API integration - using Instagram Business Account for now
-      const response = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token`)
+      // UPDATED: Use proxy
+      const response = await fetch(
+        `/api/threads/proxy?endpoint=/me&params=fields=id,username,name,threads_profile_picture_url`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }
+      )
 
       if (response.ok) {
         const data = await response.json()
-
-        // For each page, check if it has Threads capability
-        for (const page of data.data || []) {
-          try {
-            const threadsResponse = await fetch(
-              `https://graph.facebook.com/v18.0/${page.id}?fields=connected_instagram_account,threads_account&access_token=${page.access_token}`,
-            )
-
-            if (threadsResponse.ok) {
-              const threadsData = await threadsResponse.json()
-
-              if (threadsData.threads_account) {
-                const accountResponse = await fetch(
-                  `https://graph.facebook.com/v18.0/${threadsData.threads_account.id}?fields=id,username,name,profile_picture_url,followers_count&access_token=${page.access_token}`,
-                )
-
-                if (accountResponse.ok) {
-                  const accountData = await accountResponse.json()
-                  const threadsAccount: ThreadsAccount = {
-                    id: accountData.id,
-                    username: accountData.username,
-                    name: accountData.name,
-                    profile_picture_url: accountData.profile_picture_url,
-                    followers_count: accountData.followers_count,
-                  }
-
-                  setThreadsAccounts(prev => [...prev, threadsAccount])
-
-                  if (!selectedThreadsAccount) {
-                    setSelectedThreadsAccount(threadsAccount)
-                    localStorage.setItem("selected_threads_account", JSON.stringify(threadsAccount))
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.log("No Threads account for page:", page.name)
-          }
+        // ... (rest of logic remains the same)
+        const account: ThreadsAccount = {
+          id: data.id,
+          username: data.username,
+          name: data.name || data.username,
+          profile_picture_url: data.threads_profile_picture_url,
+          followers_count: 0
         }
+        setThreadsAccounts([account])
+        if (!selectedThreadsAccount) {
+          setSelectedThreadsAccount(account)
+          localStorage.setItem("selected_threads_account", JSON.stringify(account))
+        }
+      } else {
+        throw new Error("Failed to fetch Threads profile")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch Threads accounts")
@@ -770,24 +752,19 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      // Threads API endpoint for fetching posts
+      // UPDATED: Use proxy
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${account.id}/threads?fields=id,text,media_url,timestamp,like_count,reply_count&limit=10&access_token=${facebookAccessToken}`,
+        `/api/threads/proxy?endpoint=/me/threads&params=fields=id,text,media_url,timestamp,like_count,reply_count&limit=10`, {
+        headers: { 'Authorization': `Bearer ${threadsAccessToken}` }
+      }
       )
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch Threads posts")
-      }
+      if (!response.ok) throw new Error("Failed to fetch Threads posts")
 
       const data = await response.json()
-
-      if (data.error) {
-        throw new Error(data.error.message)
-      }
-
       setThreadsPosts(data.data || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch Threads posts")
+      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -1010,9 +987,16 @@ export default function DashboardPage() {
   }
   const fetchThreadsInsights = async (account: ThreadsAccount) => {
     try {
-      // Threads insights API
+      // Threads User Insights (using the proxy)
+      // Valid metrics for Threads User Insights: views, likes, replies, reposts, quotes
+      // Note: 'follower_count' is on the user object, not insights
+      const metricTypes = "views,likes,replies,reposts,quotes";
+
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${account.id}/insights?metric=impressions,reach,profile_views,follower_count,engagement&period=day&access_token=${facebookAccessToken}`,
+        `/api/threads/proxy?endpoint=/me/threads_insights&params=metric=${metricTypes}`,
+        {
+          headers: { 'Authorization': `Bearer ${threadsAccessToken}` }
+        }
       )
 
       if (response.ok) {
@@ -1021,30 +1005,48 @@ export default function DashboardPage() {
         const insights: ThreadsInsights = {
           impressions: 0,
           reach: 0,
-          profile_views: 0,
+          profile_views: 0, // Not provided by Threads API yet
           follower_count: account.followers_count || 0,
           engagement: 0,
         }
 
+        // Map Threads metrics to your dashboard structure
         data.data?.forEach((metric: any) => {
-          const value = metric.values?.[0]?.value || 0
+          // Threads API returns values in a 'values' array with 'value'
+          const value = metric.values?.[0]?.value || 0;
+
           switch (metric.name) {
-            case "impressions":
-              insights.impressions = value
-              break
-            case "reach":
-              insights.reach = value
-              break
-            case "profile_views":
-              insights.profile_views = value
-              break
-            case "engagement":
-              insights.engagement = value
-              break
+            case "views":
+              insights.impressions = value; // Threads 'views' ≈ impressions
+              insights.reach = value;       // approximate reach
+              break;
+            case "likes":
+              insights.engagement += value;
+              break;
+            case "replies":
+              insights.engagement += value;
+              break;
+            case "reposts":
+              insights.engagement += value;
+              break;
+            case "quotes":
+              insights.engagement += value;
+              break;
           }
         })
 
         setThreadsInsights(insights)
+      } else {
+        // Handle error or use mock data if the endpoint is restricted/beta
+        console.warn("Failed to fetch Threads insights, using basic data.");
+        const fallbackInsights: ThreadsInsights = {
+          impressions: 0,
+          reach: 0,
+          profile_views: 0,
+          follower_count: account.followers_count || 0,
+          engagement: 0
+        };
+        setThreadsInsights(fallbackInsights);
       }
     } catch (err) {
       console.error("Failed to fetch Threads insights:", err)
@@ -2097,79 +2099,76 @@ export default function DashboardPage() {
     if (!selectedThreadsAccount) return
 
     try {
-      setPostingStatus(prev => ({
-        ...prev,
-        message: "Posting to Threads..."
-      }))
-
+      setPostingStatus(prev => ({ ...prev, message: "Posting to Threads..." }))
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 1 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
 
-      // Threads API for creating posts
-      let response
+      let creationId = ""
 
+      // UPDATED: Use proxy for container creation
       if (fileUrls.length > 0) {
-        // Threads post with media
         const isVideo = fileTypes[0]?.startsWith("video/")
-        const mediaType = isVideo ? "video_url" : "image_url"
-
-        // Create media container first
-        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_media`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            [mediaType]: fileUrls[0],
-            caption: postContent,
-            access_token: facebookAccessToken,
-          }),
-          signal: controller.signal
-        })
-
-        if (!containerResponse.ok) {
-          const errorData = await containerResponse.json()
-          throw new Error(errorData.error?.message || "Failed to create Threads media container")
+        const mediaPayload: any = {
+          media_type: isVideo ? "VIDEO" : "IMAGE",
+          text: postContent
         }
+        if (isVideo) mediaPayload.video_url = fileUrls[0]
+        else mediaPayload.image_url = fileUrls[0]
 
-        const containerResult = await containerResponse.json()
-
-        // Publish the media post
-        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_publish`, {
+        const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: containerResult.id,
-            access_token: facebookAccessToken,
-          }),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${threadsAccessToken}`
+          },
+          body: JSON.stringify(mediaPayload),
           signal: controller.signal
         })
+
+        if (!containerResponse.ok) throw new Error("Failed to upload media to Threads")
+        const containerData = await containerResponse.json()
+        creationId = containerData.id
+
+        if (isVideo) await new Promise(r => setTimeout(r, 5000));
+
       } else {
-        // Text-only Threads post
-        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads`, {
+        // Text Only
+        const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${threadsAccessToken}`
+          },
           body: JSON.stringify({
-            text: postContent,
-            access_token: facebookAccessToken,
+            media_type: "TEXT",
+            text: postContent
           }),
           signal: controller.signal
         })
+
+        if (!containerResponse.ok) throw new Error("Failed to create Threads text post")
+        const containerData = await containerResponse.json()
+        creationId = containerData.id
       }
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ Threads post failed:", errorData)
-        throw new Error(errorData.error?.message || "Failed to post to Threads")
-      }
+      // UPDATED: Use proxy for publishing
+      const publishResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads_publish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${threadsAccessToken}`
+        },
+        body: JSON.stringify({ creation_id: creationId }),
+        signal: controller.signal
+      })
 
-      const result = await response.json()
-      console.log("✅ Threads post created:", result)
+      if (!publishResponse.ok) throw new Error("Failed to publish to Threads")
 
+      console.log("✅ Threads post created")
       clearTimeout(timeoutId)
     } catch (error) {
       console.error("❌ Threads post failed:", error)
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error("Threads request timeout - please try again")
-      }
+      if (error instanceof Error && error.name === 'AbortError') throw new Error("Threads request timeout")
       throw error
     }
   }
