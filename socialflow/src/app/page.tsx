@@ -131,13 +131,19 @@ interface PinterestPin {
   id: string
   title?: string
   description?: string
-  media_type: "image" | "video"
-  images?: {
-    [key: string]: {
-      url: string
+  // API v5 nests image data inside 'media'
+  media?: {
+    media_type?: string
+    images?: {
+      [key: string]: {
+        url: string
+        width?: number
+        height?: number
+      }
     }
   }
   created_at: string
+  // These metrics might not be available in the basic list view, keeping them optional
   like_count?: number
   comment_count?: number
   link?: string
@@ -285,7 +291,8 @@ export default function DashboardPage() {
   const [pinTitle, setPinTitle] = useState("")
   const [pinDescription, setPinDescription] = useState("")
   const [pinLink, setPinLink] = useState("")
-
+  const [newBoardName, setNewBoardName] = useState("")
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false)
   // New states for posting status and upload progress
   const [postingStatus, setPostingStatus] = useState<{
     isPosting: boolean
@@ -2049,7 +2056,43 @@ export default function DashboardPage() {
       throw error
     }
   }
+  const handleCreateBoard = async () => {
+    if (!newBoardName.trim() || !selectedPinterestAccount) return;
 
+    setIsCreatingBoard(true);
+    try {
+      // Use proxy to create board in Sandbox (or Production)
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/boards`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${pinterestAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newBoardName,
+          description: "Created via SocialFlow Dashboard"
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Add new board to list and select it
+        setPinterestBoards(prev => [...prev, data]);
+        setSelectedPinterestBoard(data);
+        localStorage.setItem("selected_pinterest_board", JSON.stringify(data));
+        setNewBoardName("");
+        // Don't alert, just seamlessly update
+      } else {
+        alert(`Failed to create board: ${data.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error creating board:", error);
+      alert("Failed to create board");
+    } finally {
+      setIsCreatingBoard(false);
+    }
+  };
   const postToThreadsAccount = async (fileUrls: string[]) => {
     if (!selectedThreadsAccount) return
 
@@ -3509,28 +3552,37 @@ export default function DashboardPage() {
                       Pinterest Pins
                     </h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {pinterestPins.map((pin) => (
-                        <Card key={pin.id}>
-                          <CardContent className="p-4">
-                            {pin.images && (
-                              <img
-                                src={Object.values(pin.images)[0]?.url || "/placeholder.svg"}
-                                alt="Pin"
-                                className="w-full h-48 object-cover rounded-lg mb-3"
-                              />
-                            )}
-                            <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
-                            <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>❤️ {pin.like_count || 0}</span>
-                              <span>💬 {pin.comment_count || 0}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(pin.created_at).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      {pinterestPins.map((pin) => {
+                        // Helper to safely extract the image URL from the nested media object
+                        // Pinterest provides multiple sizes; we try 600x315 or 1200x first, then fallback to any available
+                        const imageUrl =
+                          pin.media?.images?.['600x315']?.url ||
+                          pin.media?.images?.['1200x']?.url ||
+                          (pin.media?.images ? Object.values(pin.media.images)[0]?.url : null);
+
+                        return (
+                          <Card key={pin.id}>
+                            <CardContent className="p-4">
+                              {imageUrl && (
+                                <img
+                                  src={imageUrl}
+                                  alt="Pin"
+                                  className="w-full h-48 object-cover rounded-lg mb-3"
+                                />
+                              )}
+                              <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
+                              <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>❤️ {pin.like_count || 0}</span>
+                                <span>💬 {pin.comment_count || 0}</span>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2">
+                                {new Date(pin.created_at).toLocaleDateString()}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -3801,18 +3853,22 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {selectedPinterestBoard && (
-                  <div className="space-y-2">
-                    <Label>Selected Board</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start">
-                          {selectedPinterestBoard.name}
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full">
-                        {pinterestBoards.map((board) => (
+                <div className="space-y-2">
+                  <Label>Select or Create Board</Label>
+
+                  {/* Board Selection Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start mb-2">
+                        {selectedPinterestBoard ? selectedPinterestBoard.name : "Select a board..."}
+                        <ChevronDown className="ml-auto h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-full max-h-48 overflow-y-auto">
+                      {pinterestBoards.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">No boards found. Create one below.</div>
+                      ) : (
+                        pinterestBoards.map((board) => (
                           <DropdownMenuItem
                             key={board.id}
                             onClick={() => handlePinterestBoardSelection(board)}
@@ -3822,11 +3878,30 @@ export default function DashboardPage() {
                               <Check className="ml-auto h-4 w-4" />
                             )}
                           </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Create Board Input - Always Visible Now */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="New board name..."
+                      value={newBoardName}
+                      onChange={(e) => setNewBoardName(e.target.value)}
+                      className="h-9"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleCreateBoard}
+                      disabled={isCreatingBoard || !newBoardName.trim()}
+                    >
+                      {isCreatingBoard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      Create
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
