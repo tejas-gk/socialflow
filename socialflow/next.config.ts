@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "**.cdninstagram.com", // Allows all Instagram CDN subdomains
       },
+      {
+        protocol: "https",
+        hostname: "**i.pinimg.com", // Allows all pinterest CDN subdomains
+      },
     ],
   },
 };

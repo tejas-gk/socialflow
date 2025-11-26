@@ -131,13 +131,19 @@ interface PinterestPin {
   id: string
   title?: string
   description?: string
-  media_type: "image" | "video"
-  images?: {
-    [key: string]: {
-      url: string
+  // API v5 nests image data inside 'media'
+  media?: {
+    media_type?: string
+    images?: {
+      [key: string]: {
+        url: string
+        width?: number
+        height?: number
+      }
     }
   }
   created_at: string
+  // These metrics might not be available in the basic list view, keeping them optional
   like_count?: number
   comment_count?: number
   link?: string
@@ -255,7 +261,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [analyticsTab, setAnalyticsTab] = useState("facebook")
 
-  const [postToFacebook, setPostToFacebook] = useState(true)
+  const [postToFacebook, setPostToFacebook] = useState(false)
   const [postToInstagram, setPostToInstagram] = useState(false)
   const [postToPinterest, setPostToPinterest] = useState(false)
   const [postToThreads, setPostToThreads] = useState(false)
@@ -285,7 +291,8 @@ export default function DashboardPage() {
   const [pinTitle, setPinTitle] = useState("")
   const [pinDescription, setPinDescription] = useState("")
   const [pinLink, setPinLink] = useState("")
-
+  const [newBoardName, setNewBoardName] = useState("")
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false)
   // New states for posting status and upload progress
   const [postingStatus, setPostingStatus] = useState<{
     isPosting: boolean
@@ -409,29 +416,32 @@ export default function DashboardPage() {
       authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
     }
     else if (platform === "pinterest") {
-      clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || ""
+      clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || "";
       if (!clientId) {
-        setError("Pinterest App ID not configured")
-        return
+        setError("Pinterest Client ID not configured");
+        return;
       }
 
-      redirectUri = `${window.location.origin}/auth/pinterest/callback`
-      scope = "boards:read,boards:write,pins:read,pins:write,user_accounts:read"
-
-      authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=pinterest`
+      redirectUri = `${window.location.origin}/auth/pinterest/callback`;
+      scope = "user_accounts:read,boards:read,boards:write,pins:read,pins:write";
+      authUrl = `https://www.pinterest.com/oauth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+        redirectUri
+      )}&scope=${encodeURIComponent(
+        scope
+      )}&response_type=code&state=pinterest`;
     }
     else if (platform === "threads") {
-      // Threads uses Instagram Basic Display API for now
-      clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || ""
+      // Threads uses Facebook Graph API
+      clientId = process.env.NEXT_PUBLIC_THREADS_APP_ID || ""
       if (!clientId) {
-        setError("Facebook App ID not configured for Threads")
+        setError("Threads App ID not configured")
         return
       }
 
       redirectUri = `${window.location.origin}/auth/threads/callback`
       scope = "threads_basic,threads_content_publish"
 
-      authUrl = `https://www.threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=threads`
+      authUrl = `https://threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`
     }
 
     // Open OAuth in popup
@@ -568,8 +578,8 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      // Get user account info
-      const userResponse = await fetch(`https://api.pinterest.com/v5/user_account`, {
+      // UPDATED: Call your local proxy instead of api.pinterest.com
+      const userResponse = await fetch(`/api/pinterest/proxy?endpoint=/user_account`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -592,8 +602,8 @@ export default function DashboardPage() {
       setSelectedPinterestAccount(account)
       localStorage.setItem("selected_pinterest_account", JSON.stringify(account))
 
-      // Fetch boards
-      const boardsResponse = await fetch(`https://api.pinterest.com/v5/boards?page_size=25`, {
+      // UPDATED: Fetch boards via proxy
+      const boardsResponse = await fetch(`/api/pinterest/proxy?endpoint=/boards&params=page_size=25`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -619,55 +629,37 @@ export default function DashboardPage() {
     }
   }
 
+  // In src/app/page.tsx
+
   const fetchThreadsAccounts = async (token: string) => {
     setIsLoading(true)
     setError("")
 
     try {
-      // Threads API integration - using Instagram Business Account for now
-      const response = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token`)
+      // UPDATED: Use proxy
+      const response = await fetch(
+        `/api/threads/proxy?endpoint=/me&params=fields=id,username,name,threads_profile_picture_url`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }
+      )
 
       if (response.ok) {
         const data = await response.json()
-
-        // For each page, check if it has Threads capability
-        for (const page of data.data || []) {
-          try {
-            const threadsResponse = await fetch(
-              `https://graph.facebook.com/v18.0/${page.id}?fields=connected_instagram_account,threads_account&access_token=${page.access_token}`,
-            )
-
-            if (threadsResponse.ok) {
-              const threadsData = await threadsResponse.json()
-
-              if (threadsData.threads_account) {
-                const accountResponse = await fetch(
-                  `https://graph.facebook.com/v18.0/${threadsData.threads_account.id}?fields=id,username,name,profile_picture_url,followers_count&access_token=${page.access_token}`,
-                )
-
-                if (accountResponse.ok) {
-                  const accountData = await accountResponse.json()
-                  const threadsAccount: ThreadsAccount = {
-                    id: accountData.id,
-                    username: accountData.username,
-                    name: accountData.name,
-                    profile_picture_url: accountData.profile_picture_url,
-                    followers_count: accountData.followers_count,
-                  }
-
-                  setThreadsAccounts(prev => [...prev, threadsAccount])
-
-                  if (!selectedThreadsAccount) {
-                    setSelectedThreadsAccount(threadsAccount)
-                    localStorage.setItem("selected_threads_account", JSON.stringify(threadsAccount))
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.log("No Threads account for page:", page.name)
-          }
+        // ... (rest of logic remains the same)
+        const account: ThreadsAccount = {
+          id: data.id,
+          username: data.username,
+          name: data.name || data.username,
+          profile_picture_url: data.threads_profile_picture_url,
+          followers_count: 0
         }
+        setThreadsAccounts([account])
+        if (!selectedThreadsAccount) {
+          setSelectedThreadsAccount(account)
+          localStorage.setItem("selected_threads_account", JSON.stringify(account))
+        }
+      } else {
+        throw new Error("Failed to fetch Threads profile")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch Threads accounts")
@@ -735,7 +727,8 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      const response = await fetch(`https://api.pinterest.com/v5/pins?page_size=10`, {
+      // UPDATED: Call proxy for pins
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/pins&params=page_size=10`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -759,24 +752,19 @@ export default function DashboardPage() {
     setError("")
 
     try {
-      // Threads API endpoint for fetching posts
+      // UPDATED: Use proxy
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${account.id}/threads?fields=id,text,media_url,timestamp,like_count,reply_count&limit=10&access_token=${facebookAccessToken}`,
+        `/api/threads/proxy?endpoint=/me/threads&params=fields=id,text,media_url,timestamp,like_count,reply_count&limit=10`, {
+        headers: { 'Authorization': `Bearer ${threadsAccessToken}` }
+      }
       )
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch Threads posts")
-      }
+      if (!response.ok) throw new Error("Failed to fetch Threads posts")
 
       const data = await response.json()
-
-      if (data.error) {
-        throw new Error(data.error.message)
-      }
-
       setThreadsPosts(data.data || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch Threads posts")
+      console.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -947,8 +935,21 @@ export default function DashboardPage() {
 
   const fetchPinterestInsights = async (account: PinterestAccount) => {
     try {
-      // Pinterest Analytics API
-      const response = await fetch(`https://api.pinterest.com/v5/user_account/analytics?start_date=2024-01-01&end_date=2024-12-31&metric_types=IMPRESSION,ENGAGEMENT,CLICKTHROUGH,OUTBOUND_CLICK&app_types=ALL`, {
+      // Create dynamic dates for the last 30 days
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Build the query parameters
+      // 1. CHANGED: Replaced "CLICKTHROUGH" with "PIN_CLICK"
+      const queryParams = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        metric_types: "IMPRESSION,ENGAGEMENT,PIN_CLICK,OUTBOUND_CLICK",
+        app_types: "ALL"
+      });
+
+      // Call your local proxy
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/user_account/analytics&params=${encodeURIComponent(queryParams.toString())}`, {
         headers: {
           'Authorization': `Bearer ${pinterestAccessToken}`
         }
@@ -966,36 +967,36 @@ export default function DashboardPage() {
           pin_count: pinterestPins.length,
         }
 
-        // Process analytics data
-        data.all?.forEach((metric: any) => {
-          switch (metric.metric) {
-            case "IMPRESSION":
-              insights.pin_impressions = metric.value || 0
-              break
-            case "ENGAGEMENT":
-              insights.total_engagements = metric.value || 0
-              break
-            case "CLICKTHROUGH":
-              insights.pin_clicks = metric.value || 0
-              break
-            case "OUTBOUND_CLICK":
-              insights.outbound_clicks = metric.value || 0
-              break
-          }
-        })
+        // Map the summary metrics if available
+        if (data.summary?.metrics) {
+          insights.pin_impressions = data.summary.metrics.IMPRESSION || 0;
+          insights.total_engagements = data.summary.metrics.ENGAGEMENT || 0;
+          // 2. CHANGED: Map data.summary.metrics.PIN_CLICK to your state
+          insights.pin_clicks = data.summary.metrics.PIN_CLICK || 0;
+          insights.outbound_clicks = data.summary.metrics.OUTBOUND_CLICK || 0;
+        }
 
         setPinterestInsights(insights)
+      } else {
+        const errorData = await response.json(); // Parse JSON error to see details
+        console.error("Pinterest analytics error:", errorData);
       }
     } catch (err) {
       console.error("Failed to fetch Pinterest insights:", err)
     }
   }
-
   const fetchThreadsInsights = async (account: ThreadsAccount) => {
     try {
-      // Threads insights API
+      // Threads User Insights (using the proxy)
+      // Valid metrics for Threads User Insights: views, likes, replies, reposts, quotes
+      // Note: 'follower_count' is on the user object, not insights
+      const metricTypes = "views,likes,replies,reposts,quotes";
+
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${account.id}/insights?metric=impressions,reach,profile_views,follower_count,engagement&period=day&access_token=${facebookAccessToken}`,
+        `/api/threads/proxy?endpoint=/me/threads_insights&params=metric=${metricTypes}`,
+        {
+          headers: { 'Authorization': `Bearer ${threadsAccessToken}` }
+        }
       )
 
       if (response.ok) {
@@ -1004,30 +1005,48 @@ export default function DashboardPage() {
         const insights: ThreadsInsights = {
           impressions: 0,
           reach: 0,
-          profile_views: 0,
+          profile_views: 0, // Not provided by Threads API yet
           follower_count: account.followers_count || 0,
           engagement: 0,
         }
 
+        // Map Threads metrics to your dashboard structure
         data.data?.forEach((metric: any) => {
-          const value = metric.values?.[0]?.value || 0
+          // Threads API returns values in a 'values' array with 'value'
+          const value = metric.values?.[0]?.value || 0;
+
           switch (metric.name) {
-            case "impressions":
-              insights.impressions = value
-              break
-            case "reach":
-              insights.reach = value
-              break
-            case "profile_views":
-              insights.profile_views = value
-              break
-            case "engagement":
-              insights.engagement = value
-              break
+            case "views":
+              insights.impressions = value; // Threads 'views' ≈ impressions
+              insights.reach = value;       // approximate reach
+              break;
+            case "likes":
+              insights.engagement += value;
+              break;
+            case "replies":
+              insights.engagement += value;
+              break;
+            case "reposts":
+              insights.engagement += value;
+              break;
+            case "quotes":
+              insights.engagement += value;
+              break;
           }
         })
 
         setThreadsInsights(insights)
+      } else {
+        // Handle error or use mock data if the endpoint is restricted/beta
+        console.warn("Failed to fetch Threads insights, using basic data.");
+        const fallbackInsights: ThreadsInsights = {
+          impressions: 0,
+          reach: 0,
+          profile_views: 0,
+          follower_count: account.followers_count || 0,
+          engagement: 0
+        };
+        setThreadsInsights(fallbackInsights);
       }
     } catch (err) {
       console.error("Failed to fetch Threads insights:", err)
@@ -1984,6 +2003,8 @@ export default function DashboardPage() {
     }
   }
 
+  // In src/app/page.tsx
+
   const postToPinterestBoard = async (fileUrls: string[]) => {
     if (!selectedPinterestBoard || !selectedPinterestAccount || fileUrls.length === 0) return
 
@@ -2008,7 +2029,8 @@ export default function DashboardPage() {
         link: pinLink || undefined
       }
 
-      const response = await fetch(`https://api.pinterest.com/v5/pins`, {
+      // UPDATED: Call your local proxy instead of the direct API URL
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/pins`, {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${pinterestAccessToken}`,
@@ -2036,84 +2058,117 @@ export default function DashboardPage() {
       throw error
     }
   }
+  const handleCreateBoard = async () => {
+    if (!newBoardName.trim() || !selectedPinterestAccount) return;
 
+    setIsCreatingBoard(true);
+    try {
+      // Use proxy to create board in Sandbox (or Production)
+      const response = await fetch(`/api/pinterest/proxy?endpoint=/boards`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${pinterestAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newBoardName,
+          description: "Created via SocialFlow Dashboard"
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Add new board to list and select it
+        setPinterestBoards(prev => [...prev, data]);
+        setSelectedPinterestBoard(data);
+        localStorage.setItem("selected_pinterest_board", JSON.stringify(data));
+        setNewBoardName("");
+        // Don't alert, just seamlessly update
+      } else {
+        alert(`Failed to create board: ${data.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error creating board:", error);
+      alert("Failed to create board");
+    } finally {
+      setIsCreatingBoard(false);
+    }
+  };
   const postToThreadsAccount = async (fileUrls: string[]) => {
     if (!selectedThreadsAccount) return
 
     try {
-      setPostingStatus(prev => ({
-        ...prev,
-        message: "Posting to Threads..."
-      }))
-
+      setPostingStatus(prev => ({ ...prev, message: "Posting to Threads..." }))
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 1 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
 
-      // Threads API for creating posts
-      let response
+      let creationId = ""
 
+      // UPDATED: Use proxy for container creation
       if (fileUrls.length > 0) {
-        // Threads post with media
         const isVideo = fileTypes[0]?.startsWith("video/")
-        const mediaType = isVideo ? "video_url" : "image_url"
-
-        // Create media container first
-        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_media`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            [mediaType]: fileUrls[0],
-            caption: postContent,
-            access_token: facebookAccessToken,
-          }),
-          signal: controller.signal
-        })
-
-        if (!containerResponse.ok) {
-          const errorData = await containerResponse.json()
-          throw new Error(errorData.error?.message || "Failed to create Threads media container")
+        const mediaPayload: any = {
+          media_type: isVideo ? "VIDEO" : "IMAGE",
+          text: postContent
         }
+        if (isVideo) mediaPayload.video_url = fileUrls[0]
+        else mediaPayload.image_url = fileUrls[0]
 
-        const containerResult = await containerResponse.json()
-
-        // Publish the media post
-        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads_publish`, {
+        const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            creation_id: containerResult.id,
-            access_token: facebookAccessToken,
-          }),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${threadsAccessToken}`
+          },
+          body: JSON.stringify(mediaPayload),
           signal: controller.signal
         })
+
+        if (!containerResponse.ok) throw new Error("Failed to upload media to Threads")
+        const containerData = await containerResponse.json()
+        creationId = containerData.id
+
+        if (isVideo) await new Promise(r => setTimeout(r, 5000));
+
       } else {
-        // Text-only Threads post
-        response = await fetch(`https://graph.facebook.com/v18.0/${selectedThreadsAccount.id}/threads`, {
+        // Text Only
+        const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${threadsAccessToken}`
+          },
           body: JSON.stringify({
-            text: postContent,
-            access_token: facebookAccessToken,
+            media_type: "TEXT",
+            text: postContent
           }),
           signal: controller.signal
         })
+
+        if (!containerResponse.ok) throw new Error("Failed to create Threads text post")
+        const containerData = await containerResponse.json()
+        creationId = containerData.id
       }
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ Threads post failed:", errorData)
-        throw new Error(errorData.error?.message || "Failed to post to Threads")
-      }
+      // UPDATED: Use proxy for publishing
+      const publishResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads_publish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${threadsAccessToken}`
+        },
+        body: JSON.stringify({ creation_id: creationId }),
+        signal: controller.signal
+      })
 
-      const result = await response.json()
-      console.log("✅ Threads post created:", result)
+      if (!publishResponse.ok) throw new Error("Failed to publish to Threads")
 
+      console.log("✅ Threads post created")
       clearTimeout(timeoutId)
     } catch (error) {
       console.error("❌ Threads post failed:", error)
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error("Threads request timeout - please try again")
-      }
+      if (error instanceof Error && error.name === 'AbortError') throw new Error("Threads request timeout")
       throw error
     }
   }
@@ -3496,28 +3551,37 @@ export default function DashboardPage() {
                       Pinterest Pins
                     </h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {pinterestPins.map((pin) => (
-                        <Card key={pin.id}>
-                          <CardContent className="p-4">
-                            {pin.images && (
-                              <img
-                                src={Object.values(pin.images)[0]?.url || "/placeholder.svg"}
-                                alt="Pin"
-                                className="w-full h-48 object-cover rounded-lg mb-3"
-                              />
-                            )}
-                            <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
-                            <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>❤️ {pin.like_count || 0}</span>
-                              <span>💬 {pin.comment_count || 0}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(pin.created_at).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      {pinterestPins.map((pin) => {
+                        // Helper to safely extract the image URL from the nested media object
+                        // Pinterest provides multiple sizes; we try 600x315 or 1200x first, then fallback to any available
+                        const imageUrl =
+                          pin.media?.images?.['600x315']?.url ||
+                          pin.media?.images?.['1200x']?.url ||
+                          (pin.media?.images ? Object.values(pin.media.images)[0]?.url : null);
+
+                        return (
+                          <Card key={pin.id}>
+                            <CardContent className="p-4">
+                              {imageUrl && (
+                                <img
+                                  src={imageUrl}
+                                  alt="Pin"
+                                  className="w-full h-48 object-cover rounded-lg mb-3"
+                                />
+                              )}
+                              <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
+                              <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>❤️ {pin.like_count || 0}</span>
+                                <span>💬 {pin.comment_count || 0}</span>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2">
+                                {new Date(pin.created_at).toLocaleDateString()}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -3673,6 +3737,12 @@ export default function DashboardPage() {
                     setPostType("pin")
                     setSelectedFiles([])
                     setFilePreviews([])
+
+                    // Add these lines to auto-switch platforms
+                    setPostToFacebook(false)
+                    setPostToInstagram(false)
+                    setPostToThreads(false)
+                    setPostToPinterest(true)
                   }}
                 >
                   Pinterest Pin
@@ -3782,18 +3852,22 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {selectedPinterestBoard && (
-                  <div className="space-y-2">
-                    <Label>Selected Board</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start">
-                          {selectedPinterestBoard.name}
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-full">
-                        {pinterestBoards.map((board) => (
+                <div className="space-y-2">
+                  <Label>Select or Create Board</Label>
+
+                  {/* Board Selection Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start mb-2">
+                        {selectedPinterestBoard ? selectedPinterestBoard.name : "Select a board..."}
+                        <ChevronDown className="ml-auto h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-full max-h-48 overflow-y-auto">
+                      {pinterestBoards.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">No boards found. Create one below.</div>
+                      ) : (
+                        pinterestBoards.map((board) => (
                           <DropdownMenuItem
                             key={board.id}
                             onClick={() => handlePinterestBoardSelection(board)}
@@ -3803,11 +3877,30 @@ export default function DashboardPage() {
                               <Check className="ml-auto h-4 w-4" />
                             )}
                           </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Create Board Input - Always Visible Now */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="New board name..."
+                      value={newBoardName}
+                      onChange={(e) => setNewBoardName(e.target.value)}
+                      className="h-9"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleCreateBoard}
+                      disabled={isCreatingBoard || !newBoardName.trim()}
+                    >
+                      {isCreatingBoard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      Create
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
