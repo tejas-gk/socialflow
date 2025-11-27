@@ -1273,9 +1273,24 @@ export default function DashboardPage() {
   }
 
   // Enhanced waitForMediaProcessing with better timeout handling
-  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 30): Promise<boolean> => {
+  const waitForMediaProcessing = async (mediaId: string, accessToken: string, maxAttempts = 30, isThreads = false): Promise<boolean> => {
     const startTime = Date.now()
     const maxWaitTime = 300000 // 5 minutes max for US regions
+
+    // FIX 1: Define queryParams dynamically: only request 'status' for Threads
+    const queryParams = isThreads ? `fields=status` : `fields=status_code,status`;
+
+    // Correctly construct the API endpoint path and query parameters
+    const THREADS_PROXY_ENDPOINT = `/${mediaId}`; // The resource endpoint for the proxy
+    const THREADS_PROXY_URL = `/api/threads/proxy?endpoint=${THREADS_PROXY_ENDPOINT}&params=${encodeURIComponent(queryParams)}`;
+
+    // Original FB URL structure
+    const FACEBOOK_GRAPH_URL = `https://graph.facebook.com/v18.0/${mediaId}`;
+
+    // FIX 2: Correct URL construction for both proxy (uses params) and direct call (uses query string)
+    const apiUrl = isThreads ? THREADS_PROXY_URL : `${FACEBOOK_GRAPH_URL}?${queryParams}&access_token=${accessToken}`;
+
+    const authHeader = `Bearer ${accessToken}`;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -1287,15 +1302,23 @@ export default function DashboardPage() {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout per request
 
+        // Only pass the Authorization header if using the Threads proxy
         const response = await fetch(
-          `https://graph.facebook.com/v18.0/${mediaId}?fields=status_code,status&access_token=${accessToken}`,
-          { signal: controller.signal }
+          apiUrl,
+          {
+            signal: controller.signal,
+            headers: isThreads ? { 'Authorization': authHeader } : undefined
+          }
         )
 
         clearTimeout(timeoutId)
 
         if (!response.ok) {
           console.log(` Media status check failed, attempt ${attempt + 1}`)
+          if (response.status === 500 && isThreads) {
+            const errorText = await response.text();
+            console.error("Threads Proxy 500 Error details:", errorText);
+          }
           await new Promise((resolve) => setTimeout(resolve, 10000)) // Wait 10 seconds for US regions
           continue
         }
@@ -1303,9 +1326,12 @@ export default function DashboardPage() {
         const result = await response.json()
         console.log(` Media status check attempt ${attempt + 1}:`, result)
 
-        if (result.status_code === "FINISHED") {
+        // FIX 3: Check for BOTH status_code (for IG/FB) OR status (for Threads)
+        const currentStatus = result.status_code || result.status;
+
+        if (currentStatus === "FINISHED") {
           return true
-        } else if (result.status_code === "ERROR" || result.status === "ERROR") {
+        } else if (currentStatus === "ERROR") {
           throw new Error("Media processing failed - " + (result.status_message || "Unknown error"))
         }
 
@@ -1315,12 +1341,94 @@ export default function DashboardPage() {
         console.log(` Error checking media status, attempt ${attempt + 1}:`, error)
         if (error instanceof Error && error.name === 'AbortError') {
           console.log(" Request timeout, continuing...")
+          continue; // Go to next attempt on timeout/abort
         }
-        await new Promise((resolve) => setTimeout(resolve, 10000))
+        throw error // Re-throw any non-polling error that isn't a timeout/abort
       }
     }
 
     throw new Error("Media processing taking longer than expected - please check your posts manually")
+  }
+
+  const schedulePostViaCron = async (fileUrls: string[], fileTypes: string[]) => {
+    // 1. Convert scheduled time to Unix Timestamp (in seconds)
+    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+    const scheduledTimestamp = Math.floor(scheduledDateTime.getTime() / 1000)
+
+    // Only include platforms that rely on cron job (IG, PIN, TH)
+    const platformsToSchedule = [
+      postToInstagram ? "instagram" : null,
+      postToPinterest ? "pinterest" : null,
+      postToThreads ? "threads" : null,
+      // If Facebook is also selected, include it in the cron payload for unified posting
+      postToFacebook ? "facebook" : null,
+    ].filter(Boolean) as string[]
+
+    const payload = {
+      scheduledTimestamp,
+      platformsToSchedule,
+      postContent,
+      fileUrls,
+      postType,
+      fileTypes, // Now uses the parameter, ensuring it's not undefined
+      // Include platform-specific tokens/accounts for the cron job payload
+      ...(postToFacebook && selectedFacebookPage && {
+        facebook: {
+          accessToken: selectedFacebookPage.access_token,
+          accountId: selectedFacebookPage.id,
+          pageName: selectedFacebookPage.name,
+          taggedIds: extractTaggedPeople()
+        }
+      }),
+      ...(postToInstagram && selectedInstagramAccount && {
+        instagram: {
+          accessToken: instagramAccessToken,
+          accountId: selectedInstagramAccount.id,
+          username: selectedInstagramAccount.username
+        }
+      }),
+      ...(postToPinterest && selectedPinterestAccount && selectedPinterestBoard && {
+        pinterest: {
+          accessToken: pinterestAccessToken,
+          accountId: selectedPinterestAccount.id,
+          boardId: selectedPinterestBoard.id,
+          pinTitle,
+          pinDescription,
+          pinLink,
+          boardName: selectedPinterestBoard.name
+        }
+      }),
+      ...(postToThreads && selectedThreadsAccount && {
+        threads: {
+          accessToken: threadsAccessToken,
+          accountId: selectedThreadsAccount.id,
+          username: selectedThreadsAccount.username
+        }
+      }),
+    }
+
+    setPostingStatus(prev => ({
+      ...prev,
+      message: `Submitting job to scheduler for ${platformsToSchedule.join(", ")}...`,
+      progress: 50,
+      currentStep: "Scheduling Job"
+    }))
+
+    // Call the Next.js API proxy (/api/social/schedule), which forwards to Express Scheduler (port 4000)
+    const response = await fetch("/api/social/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || "Failed to submit post to scheduler.")
+    }
+
+    const responseData = await response.json();
+
+    return { message: "Scheduled", platforms: platformsToSchedule.join(", "), jobId: responseData.jobId }
   }
 
   const handlePost = async () => {
@@ -1367,11 +1475,8 @@ export default function DashboardPage() {
           currentStep: "Uploading Media",
           estimatedTime
         })
-
         console.log(" Uploading files to EdgeStore...")
         fileUrls = await uploadFilesToEdgeStore(selectedFiles)
-        console.log(" Files uploaded to EdgeStore:", fileUrls)
-
         setPostingStatus({
           isPosting: true,
           message: "Media upload complete! Preparing social media posts...",
@@ -1392,147 +1497,104 @@ export default function DashboardPage() {
       const results = []
       let currentProgress = 40
 
-      // Post to Facebook if selected
-      if (postToFacebook && selectedFacebookPage) {
+      // Determine posting flow:
+      const isFacebookOnly = postToFacebook && !postToInstagram && !postToPinterest && !postToThreads;
+      const requiresCronScheduling = isScheduled && !isFacebookOnly; // Cron for multi-platform or any non-FB platform
+
+      if (requiresCronScheduling) {
+        // Flow 1: Cron Scheduling (IG, Pinterest, Threads, or multi-platform including them)
+        // FIX: Pass fileTypes state explicitly to the scheduler function
+        const { platforms } = await schedulePostViaCron(fileUrls, fileTypes)
+        results.push(platforms)
+
+        // Final success status for scheduling
         setPostingStatus({
           isPosting: true,
-          message: "Posting to Facebook...",
-          progress: currentProgress,
-          currentStep: "Posting to Facebook",
-          estimatedTime
+          message: `Successfully Scheduled Posts to: ${results.join(", ")}!`,
+          progress: 100,
+          currentStep: "Scheduled",
+          estimatedTime: "Done!"
         })
 
-        console.log(" Posting to Facebook...")
+      } else if (isScheduled && isFacebookOnly) {
+        // Flow 2: Facebook Native Scheduling (Scheduled AND only Facebook selected)
+        setPostingStatus({
+          isPosting: true,
+          message: "Scheduling post via Facebook Native API...",
+          progress: currentProgress,
+          currentStep: "Native Scheduling",
+          estimatedTime
+        })
+        // postToFacebookPage internally uses isScheduled to set the publish time via Facebook's API
         await postToFacebookPage(fileUrls)
-        results.push("Facebook")
-        console.log(" Facebook post completed")
+        results.push("Facebook (Native Scheduled)")
 
-        currentProgress += 15
+        // Final success status for native scheduling
         setPostingStatus({
           isPosting: true,
-          message: "Facebook post complete!",
-          progress: currentProgress,
-          currentStep: "Facebook Complete",
-          estimatedTime
+          message: `Successfully Scheduled to: ${results.join(", ")}!`,
+          progress: 100,
+          currentStep: "Complete",
+          estimatedTime: "Done!"
+        })
+      }
+      else {
+        // Flow 3: IMMEDIATE Posting (isScheduled is false)
+
+        // Post to Facebook
+        if (postToFacebook && selectedFacebookPage) {
+          setPostingStatus(prev => ({ ...prev, message: "Posting to Facebook...", progress: currentProgress, currentStep: "Posting to Facebook" }))
+          await postToFacebookPage(fileUrls)
+          results.push("Facebook")
+          currentProgress += 15
+        }
+
+        // Post to Instagram
+        if (postToInstagram && selectedInstagramAccount) {
+          setPostingStatus(prev => ({ ...prev, message: "Posting to Instagram...", progress: currentProgress, currentStep: "Posting to Instagram" }))
+          await postToInstagramAccount(fileUrls)
+          results.push("Instagram")
+          currentProgress += 15
+        }
+
+        // Post to Pinterest
+        if (postToPinterest && selectedPinterestAccount && selectedPinterestBoard) {
+          setPostingStatus(prev => ({ ...prev, message: "Posting to Pinterest...", progress: currentProgress, currentStep: "Posting to Pinterest" }))
+          await postToPinterestBoard(fileUrls)
+          results.push("Pinterest")
+          currentProgress += 15
+        }
+
+        // Post to Threads
+        if (postToThreads && selectedThreadsAccount) {
+          setPostingStatus(prev => ({ ...prev, message: "Posting to Threads...", progress: currentProgress, currentStep: "Posting to Threads" }))
+          await postToThreadsAccount(fileUrls)
+          results.push("Threads")
+          currentProgress += 15
+        }
+
+        // Final success status for immediate posting
+        setPostingStatus({
+          isPosting: true,
+          message: `Successfully posted to: ${results.join(", ")}!`,
+          progress: 100,
+          currentStep: "Complete",
+          estimatedTime: "Done!"
         })
       }
 
-      // Post to Instagram if selected
-      if (postToInstagram && selectedInstagramAccount) {
-        setPostingStatus({
-          isPosting: true,
-          message: "Posting to Instagram...",
-          progress: currentProgress,
-          currentStep: "Posting to Instagram",
-          estimatedTime
-        })
-
-        console.log(" Posting to Instagram...")
-        await postToInstagramAccount(fileUrls)
-        results.push("Instagram")
-        console.log(" Instagram post completed")
-
-        currentProgress += 15
-        setPostingStatus({
-          isPosting: true,
-          message: "Instagram post complete!",
-          progress: currentProgress,
-          currentStep: "Instagram Complete",
-          estimatedTime
-        })
-      }
-
-      // Post to Pinterest if selected
-      if (postToPinterest && selectedPinterestAccount && selectedPinterestBoard) {
-        setPostingStatus({
-          isPosting: true,
-          message: "Posting to Pinterest...",
-          progress: currentProgress,
-          currentStep: "Posting to Pinterest",
-          estimatedTime
-        })
-
-        console.log(" Posting to Pinterest...")
-        await postToPinterestBoard(fileUrls)
-        results.push("Pinterest")
-        console.log(" Pinterest post completed")
-
-        currentProgress += 15
-        setPostingStatus({
-          isPosting: true,
-          message: "Pinterest post complete!",
-          progress: currentProgress,
-          currentStep: "Pinterest Complete",
-          estimatedTime
-        })
-      }
-
-      // Post to Threads if selected
-      if (postToThreads && selectedThreadsAccount) {
-        setPostingStatus({
-          isPosting: true,
-          message: "Posting to Threads...",
-          progress: currentProgress,
-          currentStep: "Posting to Threads",
-          estimatedTime
-        })
-
-        console.log(" Posting to Threads...")
-        await postToThreadsAccount(fileUrls)
-        results.push("Threads")
-        console.log(" Threads post completed")
-
-        currentProgress += 15
-        setPostingStatus({
-          isPosting: true,
-          message: "Threads post complete!",
-          progress: currentProgress,
-          currentStep: "Threads Complete",
-          estimatedTime
-        })
-      }
-
-      // Final success status
-      setPostingStatus({
-        isPosting: true,
-        message: `Successfully posted to: ${results.join(", ")}!`,
-        progress: 100,
-        currentStep: "Complete",
-        estimatedTime: "Done!"
-      })
-
-      // Reset form
-      setPostContent("")
-      setSelectedFiles([])
-      setFilePreviews([])
-      setScheduledDate("")
-      setScheduledTime("")
-      setIsScheduled(false)
-      setPostType("post")
-      setSelectedPlatforms([])
-      setTaggedPeopleMap(new Map())
-      setFileTypes([]) // Reset file types
-      setPinTitle("")
-      setPinDescription("")
-      setPinLink("")
+      // Reset form (omitted for brevity)
 
       // Refresh posts with delay to allow for processing
       setTimeout(() => {
-        if (postToFacebook && selectedFacebookPage) {
-          fetchFacebookPagePosts(selectedFacebookPage)
-        }
-        if (postToInstagram && selectedInstagramAccount) {
-          fetchInstagramPosts(selectedInstagramAccount)
-        }
-        if (postToPinterest && selectedPinterestAccount) {
-          fetchPinterestPins(pinterestAccessToken)
-        }
-        if (postToThreads && selectedThreadsAccount) {
-          fetchThreadsPosts(selectedThreadsAccount)
-        }
+        if (selectedFacebookPage) fetchFacebookPagePosts(selectedFacebookPage)
+        if (selectedInstagramAccount) fetchInstagramPosts(selectedInstagramAccount)
+        if (selectedPinterestAccount) fetchPinterestPins(pinterestAccessToken)
+        if (selectedThreadsAccount) fetchThreadsPosts(selectedThreadsAccount)
       }, 5000)
 
-      // Show success for 3 seconds before hiding
+
+      // Show status for 3 seconds before hiding
       setTimeout(() => {
         setPostingStatus({
           isPosting: false,
@@ -1540,6 +1602,17 @@ export default function DashboardPage() {
           progress: 0,
           currentStep: ""
         })
+        // Clear all form data and media
+        setPostContent("")
+        setPinTitle("")
+        setPinDescription("")
+        setPinLink("")
+        setSelectedFiles([])
+        setFilePreviews([])
+        setFileTypes([])
+        setIsScheduled(false)
+        setScheduledDate("")
+        setScheduledTime("")
       }, 3000)
 
     } catch (err) {
@@ -2096,82 +2169,157 @@ export default function DashboardPage() {
     }
   };
   const postToThreadsAccount = async (fileUrls: string[]) => {
-    if (!selectedThreadsAccount) return
+    if (!selectedThreadsAccount) return;
 
     try {
-      setPostingStatus(prev => ({ ...prev, message: "Posting to Threads..." }))
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000)
+      setPostingStatus(prev => ({ ...prev, message: "Posting to Threads..." }));
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      let creationId = ""
+      let creationId = "";
 
-      // UPDATED: Use proxy for container creation
-      if (fileUrls.length > 0) {
-        const isVideo = fileTypes[0]?.startsWith("video/")
-        const mediaPayload: any = {
-          media_type: isVideo ? "VIDEO" : "IMAGE",
-          text: postContent
+      const pollingAccessToken = selectedInstagramAccount
+        ? (selectedInstagramAccount as any).access_token
+        : threadsAccessToken;
+
+      const hasMedia = fileUrls.length > 0;
+
+      if (hasMedia) {
+        // 1) Create child containers if more than 1 file => carousel
+        let childContainerIds: string[] = [];
+
+        if (fileUrls.length > 1) {
+          // CAROUSEL children
+          for (let i = 0; i < fileUrls.length; i++) {
+            const isVideo = fileTypes[i]?.startsWith("video/");
+            const payload: any = {
+              media_type: isVideo ? "VIDEO" : "IMAGE",
+              is_carousel_item: true,
+            };
+
+            if (isVideo) payload.video_url = fileUrls[i];
+            else payload.image_url = fileUrls[i];
+
+            const res = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${threadsAccessToken}`,
+              },
+              body: JSON.stringify(payload),
+              signal: controller.signal,
+            });
+
+            if (!res.ok) throw new Error("Failed to create Threads carousel item");
+
+            const data = await res.json();
+            childContainerIds.push(data.id);
+
+            if (isVideo) {
+              setPostingStatus(prev => ({
+                ...prev,
+                message: `Processing video ${i + 1}/${fileUrls.length} for Threads...`,
+              }));
+              // FIX: Pass isThreads = true to force proxy usage for status check
+              await waitForMediaProcessing(data.id, pollingAccessToken, 30, true);
+            }
+          }
+
+          // 2) Create parent CAROUSEL container
+          const parentPayload: any = {
+            media_type: "CAROUSEL",
+            children: childContainerIds,
+            text: postContent,
+          };
+
+          const parentRes = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${threadsAccessToken}`,
+            },
+            body: JSON.stringify(parentPayload),
+            signal: controller.signal,
+          });
+
+          if (!parentRes.ok) throw new Error("Failed to create Threads carousel container");
+          const parentData = await parentRes.json();
+          creationId = parentData.id;
+        } else {
+          // Single IMAGE/VIDEO (your existing logic)
+          const isVideo = fileTypes[0]?.startsWith("video/");
+          const mediaPayload: any = {
+            media_type: isVideo ? "VIDEO" : "IMAGE",
+            text: postContent,
+          };
+          if (isVideo) mediaPayload.video_url = fileUrls[0];
+          else mediaPayload.image_url = fileUrls[0];
+
+          const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${threadsAccessToken}`,
+            },
+            body: JSON.stringify(mediaPayload),
+            signal: controller.signal,
+          });
+
+          if (!containerResponse.ok) throw new Error("Failed to upload media to Threads");
+          const containerData = await containerResponse.json();
+          creationId = containerData.id;
+
+          if (isVideo) {
+            setPostingStatus(prev => ({
+              ...prev,
+              message: "Processing video for Threads (may take a few minutes)...",
+            }));
+            // FIX: Pass isThreads = true to force proxy usage for status check
+            await waitForMediaProcessing(creationId, pollingAccessToken, 30, true);
+          }
         }
-        if (isVideo) mediaPayload.video_url = fileUrls[0]
-        else mediaPayload.image_url = fileUrls[0]
-
-        const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${threadsAccessToken}`
-          },
-          body: JSON.stringify(mediaPayload),
-          signal: controller.signal
-        })
-
-        if (!containerResponse.ok) throw new Error("Failed to upload media to Threads")
-        const containerData = await containerResponse.json()
-        creationId = containerData.id
-
-        if (isVideo) await new Promise(r => setTimeout(r, 5000));
-
       } else {
-        // Text Only
+        // Text only
         const containerResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${threadsAccessToken}`
+            "Authorization": `Bearer ${threadsAccessToken}`,
           },
           body: JSON.stringify({
             media_type: "TEXT",
-            text: postContent
+            text: postContent,
           }),
-          signal: controller.signal
-        })
+          signal: controller.signal,
+        });
 
-        if (!containerResponse.ok) throw new Error("Failed to create Threads text post")
-        const containerData = await containerResponse.json()
-        creationId = containerData.id
+        if (!containerResponse.ok) throw new Error("Failed to create Threads text post");
+        const containerData = await containerResponse.json();
+        creationId = containerData.id;
       }
 
-      // UPDATED: Use proxy for publishing
+      // 3) Publish (single or carousel)
       const publishResponse = await fetch(`/api/threads/proxy?endpoint=/me/threads_publish`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${threadsAccessToken}`
+          "Authorization": `Bearer ${threadsAccessToken}`,
         },
         body: JSON.stringify({ creation_id: creationId }),
-        signal: controller.signal
-      })
+        signal: controller.signal,
+      });
 
-      if (!publishResponse.ok) throw new Error("Failed to publish to Threads")
+      if (!publishResponse.ok) throw new Error("Failed to publish to Threads");
 
-      console.log("✅ Threads post created")
-      clearTimeout(timeoutId)
+      console.log("✅ Threads post created");
+      clearTimeout(timeoutId);
     } catch (error) {
-      console.error("❌ Threads post failed:", error)
-      if (error instanceof Error && error.name === 'AbortError') throw new Error("Threads request timeout")
-      throw error
+      console.error("❌ Threads post failed:", error);
+      if (error instanceof Error && error.name === "AbortError")
+        throw new Error("Threads request timeout");
+      throw error;
     }
-  }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -2303,9 +2451,9 @@ export default function DashboardPage() {
         return "Instagram captions cannot exceed 2,200 characters"
       }
 
-      if (isScheduled && scheduledDate) {
-        return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
-      }
+      // if (isScheduled && scheduledDate) {
+      //   return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
+      // }
 
       // Instagram reel validations
       if (postType === "reel") {
@@ -2434,13 +2582,17 @@ export default function DashboardPage() {
         return "Threads posts cannot exceed 500 characters"
       }
 
-      if (isScheduled && scheduledDate) {
-        return "Threads does not support scheduled posts. Please post immediately."
-      }
+      // if (isScheduled && scheduledDate) {
+      //   return "Threads does not support scheduled posts. Please post immediately."
+      // }
 
       // Threads media validation
-      if (hasMedia && selectedFiles.length > 1) {
+      // UPDATED Threads media validation (~L2736)
+      if (postType !== "carousel" && hasMedia && selectedFiles.length > 1) {
         return "Threads posts can only have one image or video"
+      }
+      if (postType === "carousel" && selectedFiles.length < 2) {
+        return "Threads carousels require 2 or more media items."
       }
 
       if (hasMedia) {
@@ -2505,14 +2657,20 @@ export default function DashboardPage() {
       return "All files must be smaller than 100MB"
     }
 
-    // Scheduling validations
-    if (scheduledDate && (postToInstagram || postToPinterest || postToThreads)) {
-      return "Only Facebook supports scheduled posts. Please uncheck other platforms or post immediately."
-    }
+    // // Scheduling validations
+    // if (scheduledDate && (postToInstagram || postToPinterest || postToThreads)) {
+    //   return "Only Facebook supports scheduled posts. Please uncheck other platforms or post immediately."
+    // }
 
     if (scheduledDate) {
+      if (!scheduledTime) {
+        return "Please select a scheduled time."
+      }
+
+      // Combine date and time for accurate comparison (FIX from previous step)
+      const scheduledDateTimeString = `${scheduledDate}T${scheduledTime}`
       const now = new Date()
-      const scheduled = new Date(scheduledDate)
+      const scheduled = new Date(scheduledDateTimeString)
 
       if (scheduled <= now) {
         return "Scheduled time must be in the future"
@@ -4109,7 +4267,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {postToFacebook && !postToInstagram && !postToPinterest && !postToThreads && (
+            {(postToFacebook || postToInstagram || postToPinterest || postToThreads) && (
               <>
                 <div className="flex items-center space-x-2">
                   {/* @ts-ignore */}
@@ -4141,12 +4299,12 @@ export default function DashboardPage() {
                 )}
               </>
             )}
-
+            {/* 
             {(postToInstagram || postToPinterest || postToThreads) && isScheduled && (
               <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
                 Only Facebook supports scheduled posts. Uncheck other platforms to schedule to Facebook only.
               </div>
-            )}
+            )} */}
 
             <div className="flex justify-end space-x-2">
               <Button variant="outline" onClick={() => setShowPostModal(false)}>
