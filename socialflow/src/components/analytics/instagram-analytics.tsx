@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-
+import { Video } from "@/components/ui/video"
 function number(v: unknown) {
   if (v == null) return 0
   if (typeof v === "number") return v
@@ -22,62 +22,65 @@ export default function InstagramAnalytics() {
   const { data: accounts, isLoading: accountsLoading } = useSWR(
     "ig-accounts-analytics",
     () => apiClient.getInstagramAccountsAnalytics(),
-    { shouldRetryOnError: false }
-  );
-  
-  const [businessId, setBusinessId] = useState<string>("");
+    { shouldRetryOnError: false },
+  )
+
+  const [businessId, setBusinessId] = useState<string>("")
 
   useEffect(() => {
     if (!businessId && accounts && accounts.length > 0) {
-      setBusinessId(accounts[0].id);
+      setBusinessId(accounts[0].id)
     }
-  }, [accounts, businessId]);
+  }, [accounts, businessId])
 
   const { data: dashboard, isLoading: dashboardLoading } = useSWR(
-    businessId ? ["ig-dashboard", businessId] : null, 
+    businessId ? ["ig-dashboard", businessId] : null,
     () => apiClient.getInstagramDashboard(businessId),
-    { shouldRetryOnError: false }
-  );
+    { shouldRetryOnError: false },
+  )
 
   const { data: followers } = useSWR(
-    businessId ? ["ig-followers", businessId] : null, 
+    businessId ? ["ig-followers", businessId] : null,
     () => apiClient.getInstagramFollowers(businessId),
-    { shouldRetryOnError: false }
-  );
+    { shouldRetryOnError: false },
+  )
 
   const { data: engagement } = useSWR(
-    businessId ? ["ig-engagement", businessId] : null, 
+    businessId ? ["ig-engagement", businessId] : null,
     () => apiClient.getInstagramEngagement(businessId),
-    { shouldRetryOnError: false }
-  );
-  
+    { shouldRetryOnError: false },
+  )
+
   const { data: posts, isLoading: postsLoading } = useSWR(
     businessId ? ["ig-media", businessId] : null,
     () => apiClient.getInstagramAccountMedia({ accountId: businessId, limit: 10 }),
-    { shouldRetryOnError: false }
-  );
+    { shouldRetryOnError: false },
+  )
 
-  const [openPostId, setOpenPostId] = useState<string | null>(null);
-  const selectedAccount = useMemo(() => accounts?.find((acc: InstagramAccount) => acc.id === businessId), [accounts, businessId]);
+  const [openPostId, setOpenPostId] = useState<string | null>(null)
+  const selectedAccount = useMemo(
+    () => accounts?.find((acc: InstagramAccount) => acc.id === businessId),
+    [accounts, businessId],
+  )
 
   const { data: postDetails } = useSWR(
     openPostId && selectedAccount?.accessToken ? ["ig-media-details", openPostId, selectedAccount.accessToken] : null,
     ([, mediaId, token]) => apiClient.getInstagramMediaDetails(mediaId, token),
-    { shouldRetryOnError: false }
-  );
+    { shouldRetryOnError: false },
+  )
 
-  type FollowerValue = { end_time?: string; value?: number };
+  type FollowerValue = { end_time?: string; value?: number }
 
   const followerTimeseries = useMemo(() => {
-    const values: FollowerValue[] = followers?.new?.data?.[0]?.values ?? [];
+    const values: FollowerValue[] = followers?.new?.data?.[0]?.values ?? []
     return values.map((v: FollowerValue) => ({
       date: v.end_time?.slice(0, 10),
       value: number(v.value),
-    }));
-  }, [followers]);
+    }))
+  }, [followers])
 
   if (accountsLoading) {
-    return <div className="text-center text-muted-foreground py-10">Loading Instagram accounts...</div>;
+    return <div className="text-center text-muted-foreground py-10">Loading Instagram accounts...</div>
   }
 
   if (!accounts || accounts.length === 0) {
@@ -87,12 +90,10 @@ export default function InstagramAnalytics() {
           <p className="text-muted-foreground mb-4">
             No Instagram Business Account connected. Please add one from the dashboard.
           </p>
-          <Button onClick={() => window.location.href = '/dashboard'}>
-            Go to Dashboard
-          </Button>
+          <Button onClick={() => (window.location.href = "/dashboard")}>Go to Dashboard</Button>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   return (
@@ -117,23 +118,28 @@ export default function InstagramAnalytics() {
         </CardContent>
       </Card>
 
-      {(dashboardLoading || !businessId) ? (
+      {dashboardLoading || !businessId ? (
         <div className="text-center text-muted-foreground py-10">Loading analytics data...</div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <MetricCard 
-              title="Followers" 
-              value={dashboard?.getTotalFollowers?.followers_count?.toLocaleString() || selectedAccount?.followersCount?.toLocaleString() || "—"} 
+            <MetricCard
+              title="Followers"
+              value={
+                dashboard?.getTotalFollowers?.followers_count?.toLocaleString() ||
+                selectedAccount?.followersCount?.toLocaleString() ||
+                "—"
+              }
             />
-            <MetricCard 
-              title="Posts" 
-              value={dashboard?.getTotalPosts?.media_count?.toLocaleString() || selectedAccount?.mediaCount?.toLocaleString() || "—"} 
+            <MetricCard
+              title="Posts"
+              value={
+                dashboard?.getTotalPosts?.media_count?.toLocaleString() ||
+                selectedAccount?.mediaCount?.toLocaleString() ||
+                "—"
+              }
             />
-            <MetricCard 
-              title="Engagement" 
-              value={engagement?.data?.[0]?.total_value?.value?.toLocaleString() || "—"} 
-            />
+            <MetricCard title="Engagement" value={engagement?.data?.[0]?.total_value?.value?.toLocaleString() || "—"} />
           </div>
 
           <Card>
@@ -167,22 +173,36 @@ export default function InstagramAnalytics() {
                   {(posts?.data ?? []).map((post: InstagramMedia) => (
                     <div key={post.id} className="flex items-center justify-between border rounded-md p-3">
                       <div className="flex items-center gap-3 overflow-hidden">
-                        {post.media_url && post.media_type !== 'VIDEO' ? (
-                          <img src={post.media_url} alt="post" className="h-12 w-12 object-cover rounded flex-shrink-0" />
+                        {post.media_url && post.media_type !== "VIDEO" ? (
+                          <img
+                            src={post.media_url || "/placeholder.svg"}
+                            alt="post"
+                            className="h-12 w-12 object-cover rounded flex-shrink-0"
+                          />
                         ) : post.thumbnail_url ? (
-                           <img src={post.thumbnail_url} alt="video thumbnail" className="h-12 w-12 object-cover rounded flex-shrink-0" />
+                          <img
+                            src={post.thumbnail_url || "/placeholder.svg"}
+                            alt="video thumbnail"
+                            className="h-12 w-12 object-cover rounded flex-shrink-0"
+                          />
                         ) : (
                           <div className="h-12 w-12 bg-muted rounded flex-shrink-0" />
                         )}
                         <div className="flex flex-col min-w-0">
                           <div className="text-sm font-medium line-clamp-2">{post.caption || "No caption"}</div>
-                          <div className="text-xs text-muted-foreground">{new Date(post.timestamp).toLocaleString()}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(post.timestamp).toLocaleString()}
+                          </div>
                         </div>
                       </div>
-                      <Button size="sm" onClick={() => setOpenPostId(post.id)}>View</Button>
+                      <Button size="sm" onClick={() => setOpenPostId(post.id)}>
+                        View
+                      </Button>
                     </div>
                   ))}
-                  {(!posts?.data || posts.data.length === 0) && <p className="text-sm text-muted-foreground">No recent posts found.</p>}
+                  {(!posts?.data || posts.data.length === 0) && (
+                    <p className="text-sm text-muted-foreground">No recent posts found.</p>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -195,10 +215,18 @@ export default function InstagramAnalytics() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <p><strong>Username:</strong> @{selectedAccount.username}</p>
-                  <p><strong>Page Name:</strong> {selectedAccount.name}</p>
-                  <p><strong>Followers:</strong> {selectedAccount.followersCount?.toLocaleString() ?? 'N/A'}</p>
-                  <p><strong>Posts:</strong> {selectedAccount.mediaCount?.toLocaleString() ?? 'N/A'}</p>
+                  <p>
+                    <strong>Username:</strong> @{selectedAccount.username}
+                  </p>
+                  <p>
+                    <strong>Page Name:</strong> {selectedAccount.name}
+                  </p>
+                  <p>
+                    <strong>Followers:</strong> {selectedAccount.followersCount?.toLocaleString() ?? "N/A"}
+                  </p>
+                  <p>
+                    <strong>Posts:</strong> {selectedAccount.mediaCount?.toLocaleString() ?? "N/A"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -208,17 +236,35 @@ export default function InstagramAnalytics() {
 
       <Dialog open={!!openPostId} onOpenChange={(o) => !o && setOpenPostId(null)}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Post Details</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Post Details</DialogTitle>
+          </DialogHeader>
           {!postDetails ? (
             <div className="text-sm text-muted-foreground">Loading…</div>
           ) : (
             <div className="flex flex-col gap-4">
-              {postDetails?.media_details?.media_url && postDetails.media_details.media_type !== 'VIDEO' && (
-                <img src={postDetails.media_details.media_url} alt="post" className="w-full max-h-72 object-contain rounded" />
-              )}
-               {postDetails?.media_details?.media_type === 'VIDEO' && postDetails?.media_details.thumbnail_url && (
-                <img src={postDetails.media_details.thumbnail_url} alt="post" className="w-full max-h-72 object-contain rounded" />
-              )}
+              {postDetails?.media_details?.media_type === "VIDEO" && postDetails?.media_details?.media_url ? (
+                <Video
+                  src={postDetails.media_details.media_url}
+                  poster={postDetails.media_details.thumbnail_url}
+                  controls
+                  preload="metadata"
+                  className="w-full max-h-72 object-contain rounded"
+                  aria-label="Instagram video"
+                />
+              ) : postDetails?.media_details?.media_url ? (
+                <img
+                  src={postDetails.media_details.media_url || "/placeholder.svg"}
+                  alt="post"
+                  className="w-full max-h-72 object-contain rounded"
+                />
+              ) : postDetails?.media_details?.thumbnail_url ? (
+                <img
+                  src={postDetails.media_details.thumbnail_url || "/placeholder.svg"}
+                  alt="video thumbnail"
+                  className="w-full max-h-72 object-contain rounded"
+                />
+              ) : null}
               <div className="text-sm whitespace-pre-wrap">{postDetails?.media_details?.caption || "—"}</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <MetricCard title="Likes" value={number(postDetails?.media_stats?.likes)} />

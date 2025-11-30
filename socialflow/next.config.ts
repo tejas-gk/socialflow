@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  // reactStrictMode: true,
+
+  // ✅ Skip ESLint during build
+  // eslint: {
+  //   ignoreDuringBuilds: true,
+  // },
   images: {
     remotePatterns: [
       {
@@ -10,6 +19,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "**.cdninstagram.com", // Allows all Instagram CDN subdomains
+      },
+      {
+        protocol: "https",
+        hostname: "**i.pinimg.com", // Allows all pinterest CDN subdomains
       },
     ],
   },

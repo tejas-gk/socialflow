@@ -1,4 +1,3 @@
-// src/lib/api.ts
 import { upload } from '@vercel/blob/client';
 import type { PutBlobResult } from '@vercel/blob';
 
@@ -457,6 +456,7 @@ class ApiClient {
     if (typeof window !== "undefined" && window.__clerk_user_id) {
       headers["x-clerk-user-id"] = window.__clerk_user_id
     }
+    console.log("Request headers:", headers)
     return headers
   }
 
@@ -530,6 +530,7 @@ class ApiClient {
     try {
       return this.request("/auth/facebook/selected-page")
     } catch (error) {
+      console.log(error)
       return null
     }
   }
@@ -538,17 +539,15 @@ class ApiClient {
     try {
       return this.request("/auth/instagram/selected-account")
     } catch (error) {
+      console.log(error)
       return null
     }
   }
 
-  // --- START OF FIX ---
-  // Update this method to accept an optional userId.
   async getFacebookPages(userId?: string): Promise<FacebookPage[]> {
     const endpoint = userId ? `/auth/facebook/pages?userId=${userId}` : "/auth/facebook/pages";
     return this.request(endpoint);
   }
-  // --- END OF FIX ---
 
 
   async getInstagramAccounts(): Promise<InstagramAccount[]> {

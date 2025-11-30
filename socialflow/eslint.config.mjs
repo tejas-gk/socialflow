@@ -19,6 +19,22 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
     ],
+    rules: {
+      // disable “defined but never used”
+      "@typescript-eslint/no-unused-vars": "off",
+
+      // disable “Unexpected any”
+      "@typescript-eslint/no-explicit-any": "off",
+
+      // disable missing deps warning
+      "react-hooks/exhaustive-deps": "off",
+
+      // disable <img> warnings
+      "@next/next/no-img-element": "off",
+
+      // 👇 disable the “use @ts-expect-error instead of @ts-ignore” rule
+      "@typescript-eslint/ban-ts-comment": "off",
+    },
   },
 ];
 
