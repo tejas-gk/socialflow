@@ -408,7 +408,7 @@ export default function DashboardPage() {
       redirectUri = `${window.location.origin}/auth/${platform}/callback`
 
       if (platform === "facebook") {
-        scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management,read_insights"
+        scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management,read_insights,pages_manage_metadata"
       } else {
         scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,instagram_manage_insights"
       }
@@ -775,9 +775,6 @@ export default function DashboardPage() {
       const dailyResponse = await fetch(
         `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_media_view,page_follows,page_post_engagements&period=day&access_token=${page.access_token}`,
       )
-      // console.log("url", `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_media_view,page_follows&period=day&access_token=${page.access_token}`)
-      // console.log("dailyResponse", dailyResponse)
-
       if (dailyResponse.ok) {
         const dailyData = await dailyResponse.json()
         console.log("Fetched Page Insights Data:", dailyData)
@@ -3466,6 +3463,7 @@ export default function DashboardPage() {
                       </Card>
                     </div>
                   )}
+
                 </TabsContent>
 
                 <TabsContent value="instagram">
