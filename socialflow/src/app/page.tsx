@@ -408,12 +408,12 @@ export default function DashboardPage() {
       redirectUri = `${window.location.origin}/auth/${platform}/callback`
 
       if (platform === "facebook") {
-        scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management"
+        scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management,read_insights"
       } else {
         scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,instagram_manage_insights"
       }
 
-      authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
+      authUrl = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
     }
     else if (platform === "pinterest") {
       clientId = process.env.NEXT_PUBLIC_PINTEREST_APP_ID || "";
@@ -489,7 +489,7 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token,picture`,
+        `https://graph.facebook.com/v24.0/me/accounts?access_token=${token}&fields=id,name,access_token,picture`,
       )
 
       if (!response.ok) {
@@ -521,7 +521,7 @@ export default function DashboardPage() {
     try {
       // First get Facebook pages to find connected Instagram accounts
       const pagesResponse = await fetch(
-        `https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token`,
+        `https://graph.facebook.com/v24.0/me/accounts?access_token=${token}&fields=id,name,access_token`,
       )
 
       if (!pagesResponse.ok) {
@@ -535,7 +535,7 @@ export default function DashboardPage() {
       for (const page of pagesData.data || []) {
         try {
           const igResponse = await fetch(
-            `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`,
+            `https://graph.facebook.com/v24.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`,
           )
 
           if (igResponse.ok) {
@@ -543,7 +543,7 @@ export default function DashboardPage() {
 
             if (igData.instagram_business_account) {
               const igAccountResponse = await fetch(
-                `https://graph.facebook.com/v18.0/${igData.instagram_business_account.id}?fields=id,username,name,profile_picture_url,followers_count,media_count&access_token=${page.access_token}`,
+                `https://graph.facebook.com/v24.0/${igData.instagram_business_account.id}?fields=id,username,name,profile_picture_url,followers_count,media_count&access_token=${page.access_token}`,
               )
 
               if (igAccountResponse.ok) {
@@ -674,7 +674,7 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${page.id}/posts?access_token=${page.access_token}&fields=id,message,story,full_picture,created_time,likes.summary(true),comments.summary(true),shares&limit=10`,
+        `https://graph.facebook.com/v24.0/${page.id}/posts?access_token=${page.access_token}&fields=id,message,story,full_picture,created_time,likes.summary(true),comments.summary(true),shares&limit=10`,
       )
 
       if (!response.ok) {
@@ -701,7 +701,7 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${account.id}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=10&access_token=${(account as any).access_token}`,
+        `https://graph.facebook.com/v24.0/${account.id}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=10&access_token=${(account as any).access_token}`,
       )
 
       if (!response.ok) {
@@ -773,11 +773,14 @@ export default function DashboardPage() {
   const fetchPageInsights = async (page: FacebookPage) => {
     try {
       const dailyResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${page.id}/insights?metric=page_impressions,page_fans&period=day&access_token=${page.access_token}`,
+        `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_media_view,page_follows,page_post_engagements&period=day&access_token=${page.access_token}`,
       )
+      // console.log("url", `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_media_view,page_follows&period=day&access_token=${page.access_token}`)
+      // console.log("dailyResponse", dailyResponse)
 
       if (dailyResponse.ok) {
         const dailyData = await dailyResponse.json()
+        console.log("Fetched Page Insights Data:", dailyData)
         const insightsData: FacebookInsights = {
           page_impressions: 0,
           page_engaged_users: 0,
@@ -788,10 +791,20 @@ export default function DashboardPage() {
           page_actions_post_reactions_total: 0,
         }
 
+        // Map API response to your object
         dailyData.data?.forEach((metric: any) => {
           const latestValue = metric.values?.[metric.values.length - 1]?.value || 0
-          if (metric.name in insightsData) {
-            insightsData[metric.name as keyof FacebookInsights] = latestValue
+          switch (metric.name) {
+            case 'page_media_view':
+              insightsData.page_video_views = latestValue
+              break
+            case 'page_follows':
+              insightsData.page_fans = latestValue
+              break
+            case 'page_post_engagements':
+              insightsData.page_engaged_users = latestValue
+              break
+            // Add more cases if you add other metrics
           }
         })
 
@@ -799,16 +812,18 @@ export default function DashboardPage() {
       }
 
       const weeklyResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${page.id}/insights?metric=page_impressions,page_engaged_users&period=week&access_token=${page.access_token}`,
+        `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_media_view,page_lifetime_engaged_followers_unique&period=week&access_token=${page.access_token}`,
       )
+      console.log("weeklyResponse", weeklyResponse)
 
       if (weeklyResponse.ok) {
         const weeklyData = await weeklyResponse.json()
       }
 
       const demoResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${page.id}/insights?metric=page_fans_gender_age,page_fans_country,page_fans_city&period=lifetime&access_token=${page.access_token}`,
+        `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_follows_country,page_follows_city&period=lifetime&access_token=${page.access_token}`,
       )
+      console.log("demoResponse", demoResponse)
 
       if (demoResponse.ok) {
         const demoData = await demoResponse.json()
@@ -835,14 +850,14 @@ export default function DashboardPage() {
                 })
               }
             })
-          } else if (metric.name === "page_fans_country") {
+          } else if (metric.name === "page_follows_country") {
             demographics.countries = Object.entries(latestValue)
               .map(([country, value]) => ({
                 country,
                 value: value as number,
               }))
               .slice(0, 10)
-          } else if (metric.name === "page_fans_city") {
+          } else if (metric.name === "page_follows_city") {
             demographics.cities = Object.entries(latestValue)
               .map(([city, value]) => ({
                 city,
@@ -864,7 +879,7 @@ export default function DashboardPage() {
 
     try {
       // Define the metrics you want
-      const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`
+      const baseUrl = `https://graph.facebook.com/v24.0/${account.id}/insights`
 
       // Metrics that do not need metric_type
       const normalMetrics = "reach,follower_count"
@@ -1060,9 +1075,9 @@ export default function DashboardPage() {
         facebookPosts.slice(0, 5).map(async (post) => {
           try {
             const response = await fetch(
-              `https://graph.facebook.com/v18.0/${post.id}/insights?metric=post_impressions,post_reach,post_engaged_users,post_clicks&access_token=${page.access_token}`,
+              `https://graph.facebook.com/v24.0/${post.id}/insights?metric=post_media_view,post_clicks&access_token=${page.access_token}`,
             )
-
+            console.log("post response", response)
             if (response.ok) {
               const data = await response.json()
               const analytics: PostAnalytics = {
@@ -1076,7 +1091,7 @@ export default function DashboardPage() {
               data.data?.forEach((metric: any) => {
                 const value = metric.values?.[0]?.value || 0
                 switch (metric.name) {
-                  case "post_impressions":
+                  case "post_media_view":
                     analytics.impressions = value
                     break
                   case "post_reach":
@@ -1109,7 +1124,7 @@ export default function DashboardPage() {
   const fetchDemographics = async (page: FacebookPage) => {
     try {
       const demoResponse = await fetch(
-        `https://graph.facebook.com/v18.0/${page.id}/insights?metric=page_fans_gender_age,page_fans_country,page_fans_city&period=lifetime&access_token=${page.access_token}`,
+        `https://graph.facebook.com/v24.0/${page.id}/insights?metric=page_follows_country,page_follows_city&period=lifetime&access_token=${page.access_token}`,
       )
 
       if (demoResponse.ok) {
@@ -1137,14 +1152,14 @@ export default function DashboardPage() {
                 })
               }
             })
-          } else if (metric.name === "page_fans_country") {
+          } else if (metric.name === "page_follows_country") {
             demographics.countries = Object.entries(latestValue)
               .map(([country, value]) => ({
                 country,
                 value: value as number,
               }))
               .slice(0, 10)
-          } else if (metric.name === "page_fans_city") {
+          } else if (metric.name === "page_follows_city") {
             demographics.cities = Object.entries(latestValue)
               .map(([city, value]) => ({
                 city,
@@ -1286,7 +1301,7 @@ export default function DashboardPage() {
     const THREADS_PROXY_URL = `/api/threads/proxy?endpoint=${THREADS_PROXY_ENDPOINT}&params=${encodeURIComponent(queryParams)}`;
 
     // Original FB URL structure
-    const FACEBOOK_GRAPH_URL = `https://graph.facebook.com/v18.0/${mediaId}`;
+    const FACEBOOK_GRAPH_URL = `https://graph.facebook.com/v24.0/${mediaId}`;
 
     // FIX 2: Correct URL construction for both proxy (uses params) and direct call (uses query string)
     const apiUrl = isThreads ? THREADS_PROXY_URL : `${FACEBOOK_GRAPH_URL}?${queryParams}&access_token=${accessToken}`;
@@ -1662,7 +1677,7 @@ export default function DashboardPage() {
           const blob = await fileResponse.blob()
           formData.append("source", blob)
 
-          const photoResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+          const photoResponse = await fetch(`https://graph.facebook.com/v24.0/${selectedFacebookPage.id}/photos`, {
             method: "POST",
             body: formData,
             signal: controller.signal
@@ -1695,7 +1710,7 @@ export default function DashboardPage() {
           postData.published = false
         }
 
-        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/feed`, {
+        const response = await fetch(`https://graph.facebook.com/v24.0/${selectedFacebookPage.id}/feed`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(postData),
@@ -1772,7 +1787,7 @@ export default function DashboardPage() {
             formData.append("published", "false")
           }
 
-          const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/photos`, {
+          const response = await fetch(`https://graph.facebook.com/v24.0/${selectedFacebookPage.id}/photos`, {
             method: "POST",
             body: formData,
             signal: controller.signal
@@ -1806,7 +1821,7 @@ export default function DashboardPage() {
           postData["published"] = false
         }
 
-        const response = await fetch(`https://graph.facebook.com/v18.0/${selectedFacebookPage.id}/feed`, {
+        const response = await fetch(`https://graph.facebook.com/v24.0/${selectedFacebookPage.id}/feed`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(postData),
@@ -1853,7 +1868,7 @@ export default function DashboardPage() {
 
           console.log(` Creating carousel item ${i + 1}: ${mediaType} = ${url}`)
 
-          const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+          const containerResponse = await fetch(`https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1887,7 +1902,7 @@ export default function DashboardPage() {
           message: "Creating Instagram carousel..."
         }))
 
-        const carouselResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+        const carouselResponse = await fetch(`https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1913,7 +1928,7 @@ export default function DashboardPage() {
         }))
 
         const publishResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          `https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media_publish`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1945,7 +1960,7 @@ export default function DashboardPage() {
           access_token: (selectedInstagramAccount as any).access_token,
         }
 
-        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+        const containerResponse = await fetch(`https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(containerPayload),
@@ -1976,7 +1991,7 @@ export default function DashboardPage() {
         }))
 
         const publishResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          `https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media_publish`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2016,7 +2031,7 @@ export default function DashboardPage() {
 
         console.log(` Instagram container payload:`, JSON.stringify(containerPayload, null, 2))
 
-        const containerResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media`, {
+        const containerResponse = await fetch(`https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(containerPayload),
@@ -2046,7 +2061,7 @@ export default function DashboardPage() {
         }))
 
         const publishResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${selectedInstagramAccount.id}/media_publish`,
+          `https://graph.facebook.com/v24.0/${selectedInstagramAccount.id}/media_publish`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2918,7 +2933,7 @@ export default function DashboardPage() {
 
       // Search for Facebook friends/pages
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/me/friends?access_token=${token}&fields=id,name&limit=10`,
+        `https://graph.facebook.com/v24.0/me/friends?access_token=${token}&fields=id,name&limit=10`,
       )
 
       if (response.ok) {
