@@ -410,7 +410,7 @@ export default function DashboardPage() {
       if (platform === "facebook") {
         scope = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_read_user_content,business_management"
       } else {
-        scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement"
+        scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,instagram_manage_insights"
       }
 
       authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code&state=${platform}`
@@ -864,23 +864,20 @@ export default function DashboardPage() {
 
     try {
       // Define the metrics you want
-      const metrics = "reach,follower_count,profile_views,website_clicks"
-
-      // First call for metrics that don't need metric_type
       const baseUrl = `https://graph.facebook.com/v18.0/${account.id}/insights`
 
-      // Metrics that don't need metric_type
+      // Metrics that do not need metric_type
       const normalMetrics = "reach,follower_count"
 
       // Metrics that need metric_type=total_value
-      const totalMetrics = "profile_views,website_clicks"
+      const totalMetrics = "website_clicks,profile_views,views"
 
-      // Fetch reach and follower_count
+      // Fetch reach and follower_count (no metric_type)
       const res1 = await fetch(
         `${baseUrl}?metric=${normalMetrics}&period=day&access_token=${(account as any).access_token}`,
       )
 
-      // Fetch profile_views and website_clicks (need metric_type)
+      // Fetch website_clicks, profile_views, and views (with metric_type=total_value)
       const res2 = await fetch(
         `${baseUrl}?metric=${totalMetrics}&period=day&metric_type=total_value&access_token=${(account as any).access_token}`,
       )
@@ -893,7 +890,7 @@ export default function DashboardPage() {
       const data1 = await res1.json()
       const data2 = await res2.json()
 
-      // Combine both data arrays
+      // Combine all data arrays
       const allMetrics = [...(data1.data || []), ...(data2.data || [])]
 
       console.log("Instagram insights data:", allMetrics)
@@ -924,6 +921,9 @@ export default function DashboardPage() {
           case "website_clicks":
             insights.website_clicks = value
             break
+          case "views":
+            insights.impressions = value // impressions now uses views
+            break
         }
       })
 
@@ -932,6 +932,7 @@ export default function DashboardPage() {
       console.error("Failed to fetch Instagram insights:", err)
     }
   }
+
 
   const fetchPinterestInsights = async (account: PinterestAccount) => {
     try {
@@ -2618,9 +2619,9 @@ export default function DashboardPage() {
         if (postToPinterest) {
           return "Pinterest does not support carousel posts. Please uncheck Pinterest or change post type."
         }
-        if (postToThreads) {
-          return "Threads does not support carousel posts. Please uncheck Threads or change post type."
-        }
+        // if (postToThreads) {
+        //   return "Threads does not support carousel posts. Please uncheck Threads or change post type."
+        // }
       }
 
       if (postType === "reel") {
