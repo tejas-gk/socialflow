@@ -50,7 +50,7 @@ import EmojiPicker from "emoji-picker-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
 import { useEdgeStore } from "@/lib/edgestore"
-
+import { Video } from "@/components/ui/video"
 interface FacebookPage {
   id: string
   name: string
@@ -2241,7 +2241,7 @@ export default function DashboardPage() {
           // 2) Create parent CAROUSEL container
           const parentPayload: any = {
             media_type: "CAROUSEL",
-            children: childContainerIds,
+            children: childContainerIds.join(","),
             text: postContent,
           };
 
@@ -3766,27 +3766,49 @@ export default function DashboardPage() {
                       Threads Posts
                     </h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {threadsPosts.map((post) => (
-                        <Card key={post.id}>
-                          <CardContent className="p-4">
-                            {post.media_url && (
-                              <img
-                                src={post.media_url}
-                                alt="Post"
-                                className="w-full h-48 object-cover rounded-lg mb-3"
-                              />
-                            )}
-                            <p className="text-sm text-gray-600 mb-2">{post.text || "No text"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>❤️ {post.like_count || 0}</span>
-                              <span>💬 {post.reply_count || 0}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(post.timestamp).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      {threadsPosts.map((post) => {
+                        // START OF FIX: Use case-insensitive includes for a more robust check
+                        const lowerCaseUrl = post.media_url?.toLowerCase() || '';
+                        const isVideo =
+                          lowerCaseUrl.includes('.mp4') ||
+                          lowerCaseUrl.includes('.mov') ||
+                          lowerCaseUrl.includes('.avi') ||
+                          lowerCaseUrl.includes('video'); // General check for 'video' in URL
+
+                        return (
+                          <Card key={post.id}>
+                            <CardContent className="p-4">
+                              {post.media_url && (
+                                isVideo ? (
+                                  <Video
+                                    src={post.media_url}
+                                    controls
+                                    // Add width/height for better video rendering on initial load
+                                    width="100%"
+                                    height="100%"
+                                    className="w-full h-48 object-contain rounded-lg mb-3" // Changed object-cover to object-contain for videos
+                                    aria-label="Threads video post"
+                                  />
+                                ) : (
+                                  <img
+                                    src={post.media_url}
+                                    alt="Post"
+                                    className="w-full h-48 object-cover rounded-lg mb-3"
+                                  />
+                                )
+                              )}
+                              <p className="text-sm text-gray-600 mb-2">{post.text || "No text"}</p>
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>❤️ {post.like_count || 0}</span>
+                                <span>💬 {post.reply_count || 0}</span>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2">
+                                {new Date(post.timestamp).toLocaleDateString()}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
