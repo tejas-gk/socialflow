@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
         // Exchange code for access token (Instagram uses Facebook OAuth)
         const tokenResponse = await fetch(
-            `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${clientSecret}&code=${code}`,
+            `https://graph.facebook.com/v24.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${clientSecret}&code=${code}`,
         )
 
         if (!tokenResponse.ok) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
         // Exchange short-lived token for long-lived token
         const longLivedResponse = await fetch(
-            `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${tokenData.access_token}`,
+            `https://graph.facebook.com/v24.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${tokenData.access_token}`,
         )
 
         if (!longLivedResponse.ok) {

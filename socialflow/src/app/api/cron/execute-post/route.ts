@@ -3,7 +3,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 // Base URLs for Facebook Graph API
-const FACEBOOK_GRAPH_URL = "https://graph.facebook.com/v18.0";
+const FACEBOOK_GRAPH_URL = "https://graph.facebook.com/v24.0";
 
 // FIX: Define the absolute host URL for internal server-to-server calls.
 // This relies on VERCEL_URL being set in deployment, or defaults to local host.
