@@ -346,7 +346,7 @@ const executePostToThreads = async (job: any) => {
         // 2. Create parent CAROUSEL container
         const parentPayload: any = {
             media_type: "CAROUSEL",
-            children: childContainerIds,
+            children: childContainerIds.join(","),
             text: postContent,
         };
 
