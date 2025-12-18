@@ -2199,7 +2199,8 @@ export default function DashboardPage() {
 
       if (hasMedia) {
         // 1) Create child containers if more than 1 file => carousel
-        let childContainerIds: string[] = [];
+        // @ts-ignore
+        const childContainerIds: string[] = [];
 
         if (fileUrls.length > 1) {
           // CAROUSEL children

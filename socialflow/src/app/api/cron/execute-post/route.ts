@@ -63,7 +63,8 @@ const executeInstagramPost = async (job: any) => {
 
     // --- 1. CAROUSEL LOGIC ---
     if (isCarousel) {
-        let childContainerIds: string[] = [];
+        // @ts-ignore
+        const childContainerIds: string[] = [];
 
         // Ensure fileTypes is present and correct length (safety check, should be fine due to previous fix)
         if (!fileTypes || fileTypes.length < fileUrls.length) {
@@ -305,7 +306,8 @@ const executePostToThreads = async (job: any) => {
     // ADDED: CAROUSEL LOGIC
     if (fileUrls.length > 1 && postType === "carousel") {
         // --- CAROUSEL LOGIC ---
-        let childContainerIds: string[] = [];
+        // @ts-ignore
+        const childContainerIds: string[] = [];
 
         // FIX: Implement robust check for fileTypes array (from previous fix)
         if (!fileTypes || !Array.isArray(fileTypes) || fileTypes.length < fileUrls.length) {
