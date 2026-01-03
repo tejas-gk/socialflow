@@ -21,7 +21,7 @@ const edgeStoreRouter = es.router({
             const allowedTypes = [
                 'image/jpeg', 'image/jpg', 'image/png',
                 'image/webp', 'image/gif', 'video/mp4',
-                'video/mov', 'video/avi'
+                'video/mov', 'video/avi', 'text/plain'
             ];
             if (!allowedTypes.includes(fileInfo.type)) {
                 throw new Error('Invalid file type. Only images and videos are allowed.');

@@ -32,6 +32,9 @@ import {
   Clock,
   Share2,
   MessageCircle,
+  Music,
+  Play,
+  ExternalLink,
 } from "lucide-react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -200,6 +203,37 @@ interface Demographics {
   cities: any
 }
 
+interface TikTokAccount {
+  open_id: string
+  union_id: string
+  display_name: string
+  avatar_url?: string
+  follower_count?: number
+}
+
+interface TikTokVideo {
+  id: string
+  title: string
+  cover_image_url?: string
+  video_url?: string
+  embed_html?: string
+  embed_link?: string
+  share_url?: string
+  create_time: number
+  like_count?: number
+  comment_count?: number
+  share_count?: number
+  view_count?: number
+}
+
+interface TikTokInsights {
+  likes: number
+  comments: number
+  shares: number
+  views: number
+  followers: number
+}
+
 interface PostAnalytics {
   post_id: string
   impressions: number
@@ -216,33 +250,39 @@ export default function DashboardPage() {
   const [instagramAccessToken, setInstagramAccessToken] = useState("")
   const [pinterestAccessToken, setPinterestAccessToken] = useState("")
   const [threadsAccessToken, setThreadsAccessToken] = useState("")
+  const [tiktokAccessToken, setTikTokAccessToken] = useState("")
 
   const [isFacebookTokenSet, setIsFacebookTokenSet] = useState(false)
   const [isInstagramTokenSet, setIsInstagramTokenSet] = useState(false)
   const [isPinterestTokenSet, setIsPinterestTokenSet] = useState(false)
   const [isThreadsTokenSet, setIsThreadsTokenSet] = useState(false)
+  const [isTikTokTokenSet, setIsTikTokTokenSet] = useState(false)
 
   const [facebookPages, setFacebookPages] = useState<FacebookPage[]>([])
   const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccount[]>([])
   const [pinterestAccounts, setPinterestAccounts] = useState<PinterestAccount[]>([])
   const [pinterestBoards, setPinterestBoards] = useState<PinterestBoard[]>([])
   const [threadsAccounts, setThreadsAccounts] = useState<ThreadsAccount[]>([])
+  const [tiktokAccounts, setTikTokAccounts] = useState<TikTokAccount[]>([])
 
   const [selectedFacebookPage, setSelectedFacebookPage] = useState<FacebookPage | null>(null)
   const [selectedInstagramAccount, setSelectedInstagramAccount] = useState<InstagramAccount | null>(null)
   const [selectedPinterestAccount, setSelectedPinterestAccount] = useState<PinterestAccount | null>(null)
   const [selectedPinterestBoard, setSelectedPinterestBoard] = useState<PinterestBoard | null>(null)
   const [selectedThreadsAccount, setSelectedThreadsAccount] = useState<ThreadsAccount | null>(null)
+  const [selectedTikTokAccount, setSelectedTikTokAccount] = useState<TikTokAccount | null>(null)
 
   const [facebookPosts, setFacebookPosts] = useState<FacebookPost[]>([])
   const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>([])
   const [pinterestPins, setPinterestPins] = useState<PinterestPin[]>([])
   const [threadsPosts, setThreadsPosts] = useState<ThreadsPost[]>([])
+  const [tiktokVideos, setTikTokVideos] = useState<TikTokVideo[]>([])
 
   const [facebookInsights, setFacebookInsights] = useState<FacebookInsights | null>(null)
   const [instagramInsights, setInstagramInsights] = useState<InstagramInsights | null>(null)
   const [pinterestInsights, setPinterestInsights] = useState<PinterestInsights | null>(null)
   const [threadsInsights, setThreadsInsights] = useState<ThreadsInsights | null>(null)
+  const [tiktokInsights, setTikTokInsights] = useState<TikTokInsights | null>(null)
 
   const [demographics, setDemographics] = useState<Demographics | null>(null)
   const [postAnalytics, setPostAnalytics] = useState<PostAnalytics[]>([])
@@ -265,6 +305,7 @@ export default function DashboardPage() {
   const [postToInstagram, setPostToInstagram] = useState(false)
   const [postToPinterest, setPostToPinterest] = useState(false)
   const [postToThreads, setPostToThreads] = useState(false)
+  const [postToTikTok, setPostToTikTok] = useState(false)
 
   const [postType, setPostType] = useState<"post" | "reel" | "carousel" | "pin">("post")
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -329,12 +370,14 @@ export default function DashboardPage() {
     const savedInstagramToken = localStorage.getItem("instagram_access_token")
     const savedPinterestToken = localStorage.getItem("pinterest_access_token")
     const savedThreadsToken = localStorage.getItem("threads_access_token")
+    const savedTikTokToken = localStorage.getItem("tiktok_access_token")
 
     const savedFacebookPage = localStorage.getItem("selected_facebook_page")
     const savedInstagramAccount = localStorage.getItem("selected_instagram_account")
     const savedPinterestAccount = localStorage.getItem("selected_pinterest_account")
     const savedPinterestBoard = localStorage.getItem("selected_pinterest_board")
     const savedThreadsAccount = localStorage.getItem("selected_threads_account")
+    const savedTikTokAccount = localStorage.getItem("selected_tiktok_account")
 
     if (savedFacebookToken) {
       setFacebookAccessToken(savedFacebookToken)
@@ -384,6 +427,17 @@ export default function DashboardPage() {
       setSelectedThreadsAccount(JSON.parse(savedThreadsAccount))
     }
 
+    if (savedTikTokToken) {
+      setTikTokAccessToken(savedTikTokToken)
+      setIsTikTokTokenSet(true)
+      fetchTikTokAccounts(savedTikTokToken)
+      setSelectedPlatforms((prev) => [...prev, "tiktok"])
+    }
+
+    if (savedTikTokAccount) {
+      setSelectedTikTokAccount(JSON.parse(savedTikTokAccount))
+    }
+
     // Show token modal only if neither platform is connected
     if (!savedFacebookToken && !savedInstagramToken && !savedPinterestToken && !savedThreadsToken) {
       setShowTokenModal(true)
@@ -392,7 +446,7 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const initiateOAuth = (platform: "facebook" | "instagram" | "pinterest" | "threads") => {
+  const initiateOAuth = (platform: "facebook" | "instagram" | "pinterest" | "threads" | "tiktok") => {
     let authUrl = ""
     let clientId = ""
     let redirectUri = ""
@@ -443,6 +497,18 @@ export default function DashboardPage() {
 
       authUrl = `https://threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`
     }
+    else if (platform === "tiktok") {
+      clientId = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_KEY || ""
+      if (!clientId) {
+        setError("TikTok Client Key not configured")
+        return
+      }
+
+      redirectUri = `${window.location.origin}/auth/tiktok/callback`
+      scope = "user.info.basic,user.info.stats,video.list,video.upload,video.publish"
+
+      authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`
+    }
 
     // Open OAuth in popup
     const popup = window.open(authUrl, `${platform}_oauth`, "width=600,height=600,scrollbars=yes,resizable=yes")
@@ -474,6 +540,11 @@ export default function DashboardPage() {
             setIsThreadsTokenSet(true)
             fetchThreadsAccounts(savedToken)
             setSelectedPlatforms((prev) => [...prev, "threads"])
+          } else if (platform === "tiktok") {
+            setTikTokAccessToken(savedToken)
+            setIsTikTokTokenSet(true)
+            fetchTikTokAccounts(savedToken)
+            setSelectedPlatforms((prev) => [...prev, "tiktok"])
           }
           setShowTokenModal(false)
           setShowPageModal(true)
@@ -768,6 +839,92 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const fetchTikTokAccounts = async (token: string) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // TikTok API 'user.info.basic' returns open_id, union_id, avatar_url, display_name
+      // URL: https://open.tiktokapis.com/v2/user/info/
+      const response = await fetch(
+        `/api/tiktok/proxy?endpoint=/user/info/&params=fields=open_id,union_id,avatar_url,display_name,follower_count`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        const userData = data.data?.user || {}
+
+        const account: TikTokAccount = {
+          open_id: userData.open_id,
+          union_id: userData.union_id,
+          display_name: userData.display_name,
+          avatar_url: userData.avatar_url,
+          follower_count: userData.follower_count || 0
+        }
+
+        setTikTokAccounts([account])
+        if (!selectedTikTokAccount) {
+          setSelectedTikTokAccount(account)
+          localStorage.setItem("selected_tiktok_account", JSON.stringify(account))
+        }
+
+        fetchTikTokVideos(token)
+      } else {
+        throw new Error("Failed to fetch TikTok profile")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch TikTok accounts")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchTikTokVideos = async (token: string) => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      // URL: https://open.tiktokapis.com/v2/video/list/
+      const queryParams = new URLSearchParams({
+        endpoint: '/video/list/',
+        params: 'fields=id,title,cover_image_url,video_description,create_time,like_count,comment_count,share_count,view_count,embed_html,embed_link,share_url&max_count=10'
+      })
+
+      const response = await fetch(
+        `/api/tiktok/proxy?${queryParams.toString()}`,
+        {
+          method: "POST", // video/list is POST
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({}) // Pagination payload if needed
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        setTikTokVideos(data.data?.videos || [])
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchTikTokInsights = async (account: TikTokAccount) => {
+    // Simplified mock or basic calculation as TikTok insights API might require different scopes/permissions
+    // This is a placeholder for structure
+    setTikTokInsights({
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+      followers: account.follower_count || 0
+    })
   }
 
   const fetchPageInsights = async (page: FacebookPage) => {
@@ -1368,11 +1525,16 @@ export default function DashboardPage() {
     const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
     const scheduledTimestamp = Math.floor(scheduledDateTime.getTime() / 1000)
 
+    console.log("scheduling debug: postToTikTok:", postToTikTok);
+    console.log("scheduling debug: selectedTikTokAccount:", selectedTikTokAccount);
+    console.log("scheduling debug: tiktokAccessToken:", tiktokAccessToken);
+
     // Only include platforms that rely on cron job (IG, PIN, TH)
     const platformsToSchedule = [
       postToInstagram ? "instagram" : null,
       postToPinterest ? "pinterest" : null,
       postToThreads ? "threads" : null,
+      postToTikTok ? "tiktok" : null,
       // If Facebook is also selected, include it in the cron payload for unified posting
       postToFacebook ? "facebook" : null,
     ].filter(Boolean) as string[]
@@ -1418,7 +1580,15 @@ export default function DashboardPage() {
           username: selectedThreadsAccount.username
         }
       }),
+      ...(postToTikTok && selectedTikTokAccount ? {
+        tiktok: {
+          accessToken: tiktokAccessToken,
+          openId: selectedTikTokAccount.open_id,
+        }
+      } : {}),
     }
+
+    console.log("scheduling debug: FINAL PAYLOAD:", JSON.stringify(payload, null, 2));
 
     setPostingStatus(prev => ({
       ...prev,
@@ -1457,7 +1627,7 @@ export default function DashboardPage() {
 
     // Calculate estimated time based on platforms and media
     let estimatedTime = "1-2 minutes"
-    const platformCount = [postToFacebook, postToInstagram, postToPinterest, postToThreads].filter(Boolean).length
+    const platformCount = [postToFacebook, postToInstagram, postToPinterest, postToThreads, postToTikTok].filter(Boolean).length
     if (platformCount > 2) {
       estimatedTime = "3-5 minutes"
     } else if (platformCount > 1) {
@@ -1511,7 +1681,7 @@ export default function DashboardPage() {
       let currentProgress = 40
 
       // Determine posting flow:
-      const isFacebookOnly = postToFacebook && !postToInstagram && !postToPinterest && !postToThreads;
+      const isFacebookOnly = postToFacebook && !postToInstagram && !postToPinterest && !postToThreads && !postToTikTok;
       const requiresCronScheduling = isScheduled && !isFacebookOnly; // Cron for multi-platform or any non-FB platform
 
       if (requiresCronScheduling) {
@@ -1586,6 +1756,14 @@ export default function DashboardPage() {
           currentProgress += 15
         }
 
+        // Post to TikTok
+        if (postToTikTok && selectedTikTokAccount) {
+          setPostingStatus(prev => ({ ...prev, message: "Posting to TikTok...", progress: currentProgress, currentStep: "Posting to TikTok" }))
+          await postToTikTokAccount(fileUrls)
+          results.push("TikTok")
+          currentProgress += 15
+        }
+
         // Final success status for immediate posting
         setPostingStatus({
           isPosting: true,
@@ -1600,10 +1778,10 @@ export default function DashboardPage() {
 
       // Refresh posts with delay to allow for processing
       setTimeout(() => {
-        if (selectedFacebookPage) fetchFacebookPagePosts(selectedFacebookPage)
         if (selectedInstagramAccount) fetchInstagramPosts(selectedInstagramAccount)
         if (selectedPinterestAccount) fetchPinterestPins(pinterestAccessToken)
         if (selectedThreadsAccount) fetchThreadsPosts(selectedThreadsAccount)
+        if (selectedTikTokAccount) fetchTikTokVideos(tiktokAccessToken)
       }, 5000)
 
 
@@ -2335,6 +2513,219 @@ export default function DashboardPage() {
     }
   };
 
+  const postToTikTokAccount = async (fileUrls: string[]) => {
+    if (!selectedTikTokAccount || fileUrls.length === 0) return
+
+    try {
+      setPostingStatus(prev => ({ ...prev, message: "Posting to TikTok..." }))
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 min timeout
+
+      // First, query creator info to get valid privacy levels
+      const creatorInfoResponse = await fetch(`/api/tiktok/proxy?endpoint=/post/publish/creator_info/query/`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${tiktokAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal
+      })
+
+      if (!creatorInfoResponse.ok) {
+        throw new Error("Failed to fetch creator info for posting configuration")
+      }
+
+      const creatorData = await creatorInfoResponse.json()
+      // Default to MUTUAL_FOLLOW_FRIENDS if public isn't available, or just use PUBLIC_TO_EVERYONE and let API validate
+      // TikTok requires dynamic privacy levels based on user settings
+      // IMPORTANT: For unaudited apps (like this dev one), access is restricted to SELF_ONLY (Private).
+      // Attempting PUBLIC or FRIENDS will result in 403 Forbidden.
+      // We check if SELF_ONLY is in options, otherwise default to the first available option.
+      const availablePrivacyOptions = creatorData.data?.privacy_level_options || [];
+      const privacyLevel = availablePrivacyOptions.includes("SELF_ONLY")
+        ? "SELF_ONLY"
+        : (availablePrivacyOptions[0] || "SELF_ONLY");
+
+      // Use the proxy to initiate upload
+      const file = selectedFiles[0]
+      const isPhoto = file.type.startsWith("image/")
+
+      if (isPhoto) {
+        // PHOTO POST FLOW
+        // TikTok Photo API requires PULL_FROM_URL. FILE_UPLOAD is not supported for photos.
+        // We must use the EdgeStore URL we already uploaded.
+        // Note: Users might face "url_ownership_unverified" if EdgeStore domain isn't verified in TikTok dev portal.
+
+        // PHOTO POST FLOW (FILE_UPLOAD) - CORRECTED
+        // Using FILE_UPLOAD for photos.
+
+        const rawImageUrl = fileUrls[0];
+        if (!rawImageUrl) throw new Error("Image URL not found for TikTok photo post");
+
+        console.log("📸 [TikTok Photo] Fetching image from:", rawImageUrl);
+
+        // 1. Fetch the file blob
+        const imgResponse = await fetch(rawImageUrl);
+        if (!imgResponse.ok) throw new Error("Failed to fetch image file for upload");
+        const imgBlob = await imgResponse.blob();
+
+        console.log("📸 [TikTok Photo] Image fetched. Size:", imgBlob.size);
+
+        const payload = {
+          media_type: "PHOTO",
+          post_mode: "DIRECT_POST",
+          post_info: {
+            title: postContent.substring(0, 90) || "Photo from SocialFlow",
+            privacy_level: "SELF_ONLY",
+            disable_comment: false,
+            auto_add_music: false
+          },
+          source_info: {
+            source: "FILE_UPLOAD"
+          }
+        };
+
+        console.log("📸 [TikTok Photo] Sending Init Payload:", JSON.stringify(payload, null, 2));
+
+        // 2. Init Upload
+        const response = await fetch(`/api/tiktok/proxy?endpoint=/post/publish/content/init/`, {
+          method: "POST",
+          headers: {
+            'Authorization': `Bearer ${tiktokAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        })
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error(`❌ TikTok Photo Init Failed: ${text}`);
+          throw new Error(`TikTok Photo Init Failed: ${text}`);
+        }
+
+        const data = await response.json();
+        const uploadUrl = data.data.upload_url;
+
+        console.log("✅ TikTok Init Success. Uploading to:", uploadUrl);
+
+        // 3. Upload File
+        const uploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: imgBlob
+        });
+
+        if (!uploadRes.ok) {
+          const upText = await uploadRes.text();
+          throw new Error(`TikTok Image Upload Failed: ${upText}`);
+        }
+
+        console.log("✅ TikTok photo uploaded successfully!");
+        setPostingStatus(prev => ({ ...prev, message: "TikTok photo uploaded successfully!" }))
+
+      } else {
+        // VIDEO POST FLOW (FILE_UPLOAD)
+        const videoSize = file.size
+        const CHUNK_SIZE_LIMIT = 5 * 1024 * 1024; // 5MB
+
+        let chunkSize = videoSize;
+        let totalChunkCount = 1;
+
+        if (videoSize > CHUNK_SIZE_LIMIT) {
+          chunkSize = 10 * 1024 * 1024; // 10 MB per chunk
+          if (chunkSize > videoSize) chunkSize = videoSize;
+
+          if (videoSize < chunkSize) {
+            chunkSize = videoSize;
+            totalChunkCount = 1;
+          } else {
+            totalChunkCount = Math.ceil(videoSize / chunkSize);
+          }
+        }
+
+        const response = await fetch(`/api/tiktok/proxy?endpoint=/post/publish/video/init/`, {
+          method: "POST",
+          headers: {
+            'Authorization': `Bearer ${tiktokAccessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            post_info: {
+              title: postContent.substring(0, 150) || "Video from SocialFlow",
+              privacy_level: "SELF_ONLY", // STRICT REQUIREMENT for unaudited apps
+              disable_duet: true,
+              disable_comment: true,
+              disable_stitch: true,
+              video_cover_timestamp_ms: 1000,
+              brand_content_toggle: false,
+              brand_organic_toggle: false
+            },
+            source_info: {
+              source: "FILE_UPLOAD",
+              video_size: videoSize,
+              chunk_size: chunkSize,
+              total_chunk_count: totalChunkCount
+            }
+          }),
+          signal: controller.signal
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error("TikTok Post Init Error Details:", errorData)
+          let errorMessage = errorData.error?.message || JSON.stringify(errorData) || "Failed to post to TikTok";
+          if (response.status === 403) {
+            errorMessage += " (NOTE: For this dev app, your TikTok account MUST be set to 'Private' in TikTok settings, and privacy level restricted to 'SELF_ONLY'.)"
+          }
+          throw new Error(errorMessage)
+        }
+
+        const data = await response.json()
+        const uploadUrl = data.data.upload_url
+
+        // Upload Video Chunks
+        setPostingStatus(prev => ({ ...prev, message: "Uploading video data to TikTok..." }))
+
+        for (let i = 0; i < totalChunkCount; i++) {
+          const start = i * chunkSize
+          let end = start + chunkSize
+          if (i === totalChunkCount - 1) end = videoSize
+
+          const chunkBlob = file.slice(start, end)
+
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": file.type || "video/mp4",
+              "Content-Range": `bytes ${start}-${end - 1}/${videoSize}`
+            },
+            body: chunkBlob
+          })
+
+          if (!uploadRes.ok) throw new Error("Failed to upload video chunk to TikTok")
+        }
+        console.log("✅ TikTok post initiated successfully:", data)
+        setPostingStatus(prev => ({ ...prev, message: "TikTok post initiated! Processing may take a moment." }))
+      } // End Video Flow
+
+      clearTimeout(timeoutId)
+    } catch (error) {
+      console.error("❌ TikTok post failed:", error)
+      let errorMessage = "Failed to post to TikTok";
+      if (error instanceof Error) {
+        errorMessage = error.name === 'AbortError' ? "TikTok request timeout" : error.message;
+      }
+      setPostingStatus(prev => ({
+        ...prev,
+        status: "error",
+        message: errorMessage
+      }))
+    }
+  }
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
@@ -2424,30 +2815,17 @@ export default function DashboardPage() {
 
   const validatePost = (): string | null => {
     // Platform selection validation
-    if (!postToFacebook && !postToInstagram && !postToPinterest && !postToThreads) {
+    if (!postToFacebook && !postToInstagram && !postToPinterest && !postToThreads && !postToTikTok) {
       return "Please select at least one platform to post to"
     }
 
     // Account selection validation
-    if (postToFacebook && !selectedFacebookPage) {
-      return "Please select a Facebook page to post to"
-    }
-
-    if (postToInstagram && !selectedInstagramAccount) {
-      return "Please select an Instagram account to post to"
-    }
-
-    if (postToPinterest && !selectedPinterestAccount) {
-      return "Please select a Pinterest account to post to"
-    }
-
-    if (postToPinterest && !selectedPinterestBoard) {
-      return "Please select a Pinterest board to post to"
-    }
-
-    if (postToThreads && !selectedThreadsAccount) {
-      return "Please select a Threads account to post to"
-    }
+    if (postToFacebook && !selectedFacebookPage) return "Please select a Facebook page to post to"
+    if (postToInstagram && !selectedInstagramAccount) return "Please select an Instagram account to post to"
+    if (postToPinterest && !selectedPinterestAccount) return "Please select a Pinterest account to post to"
+    if (postToPinterest && !selectedPinterestBoard) return "Please select a Pinterest board to post to"
+    if (postToThreads && !selectedThreadsAccount) return "Please select a Threads account to post to"
+    if (postToTikTok && !selectedTikTokAccount) return "Please select a TikTok account to post to"
 
     // Content validation based on platform and post type
     const hasContent = postContent.trim().length > 0
@@ -2455,153 +2833,85 @@ export default function DashboardPage() {
 
     // Instagram-specific validations
     if (postToInstagram) {
-      // Instagram always requires media (except for text posts which aren't supported)
-      if (!hasMedia) {
-        return "Instagram posts require at least one image or video"
-      }
+      if (!hasMedia) return "Instagram posts require at least one image or video"
+      if (postContent.length > 2200) return "Instagram captions cannot exceed 2,200 characters"
 
-      // Instagram character limits
-      if (postContent.length > 2200) {
-        return "Instagram captions cannot exceed 2,200 characters"
-      }
-
-      // if (isScheduled && scheduledDate) {
-      //   return "Instagram does not support scheduled posts. Please post immediately or schedule only to Facebook."
-      // }
-
-      // Instagram reel validations
       if (postType === "reel") {
-        if (selectedFiles.length !== 1) {
-          return "Instagram reels require exactly one video file"
-        }
+        if (selectedFiles.length !== 1) return "Instagram reels require exactly one video file"
         const file = selectedFiles[0]
-        if (!file.type.startsWith("video/")) {
-          return "Instagram reels must be video files"
-        }
+        if (!file.type.startsWith("video/")) return "Instagram reels must be video files"
       }
 
-      // Instagram carousel validations
       if (postType === "carousel") {
-        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
-          return "Instagram carousels require 2-10 images or videos"
-        }
-        // Instagram allows mixed media in carousels
+        if (selectedFiles.length < 2 || selectedFiles.length > 10) return "Instagram carousels require 2-10 images or videos"
         const hasInvalidFiles = selectedFiles.some(
           (file) => !file.type.startsWith("image/") && !file.type.startsWith("video/"),
         )
-        if (hasInvalidFiles) {
-          return "Instagram carousel items must be images or videos"
-        }
+        if (hasInvalidFiles) return "Instagram carousel items must be images or videos"
       }
 
-      // Instagram regular post validations
       if (postType === "post") {
-        if (selectedFiles.length > 1) {
-          return "Instagram single posts can only have one image or video"
-        }
+        if (selectedFiles.length > 1) return "Instagram single posts can only have one image or video"
         const file = selectedFiles[0]
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-          return "Instagram posts must be images or videos"
-        }
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return "Instagram posts must be images or videos"
       }
     }
 
     // Facebook-specific validations
     if (postToFacebook) {
-      // Facebook allows text-only posts
-      if (!hasContent && !hasMedia) {
-        return "Facebook posts require either text content or media"
-      }
+      if (!hasContent && !hasMedia) return "Facebook posts require either text content or media"
+      if (postContent.length > 63206) return "Facebook posts cannot exceed 63,206 characters"
 
-      // Facebook character limits
-      if (postContent.length > 63206) {
-        return "Facebook posts cannot exceed 63,206 characters"
-      }
-
-      // Facebook reel validations
       if (postType === "reel") {
-        if (selectedFiles.length !== 1) {
-          return "Facebook reels require exactly one video file"
-        }
+        if (selectedFiles.length !== 1) return "Facebook reels require exactly one video file"
         const file = selectedFiles[0]
-        if (!file.type.startsWith("video/")) {
-          return "Facebook reels must be video files"
-        }
-        // Additional Facebook video format validation
+        if (!file.type.startsWith("video/")) return "Facebook reels must be video files"
         const supportedVideoTypes = ["video/mp4", "video/mov", "video/avi"]
-        if (!supportedVideoTypes.includes(file.type)) {
-          return "Facebook supports MP4, MOV, and AVI video formats for reels"
-        }
-        // File size validation for Facebook videos
-        if (file.size > 4000 * 1024 * 1024) {
-          return "Video file must be smaller than 4GB for Facebook"
-        }
+        if (!supportedVideoTypes.includes(file.type)) return "Facebook supports MP4, MOV, and AVI video formats for reels"
       }
 
-      // Facebook carousel validations
+      // File size validation for Facebook videos
+      if (selectedFiles.length > 0 && selectedFiles[0].size > 4000 * 1024 * 1024) {
+        return "Video file must be smaller than 4GB for Facebook"
+      }
+
       if (postType === "carousel") {
-        if (selectedFiles.length < 2 || selectedFiles.length > 10) {
-          return "Facebook carousels require 2-10 images"
-        }
-        // Facebook carousels are image-only
+        if (selectedFiles.length < 2 || selectedFiles.length > 10) return "Facebook carousels require 2-10 images"
         const hasNonImages = selectedFiles.some((file) => !file.type.startsWith("image/"))
-        if (hasNonImages) {
-          return "Facebook carousel posts can only contain images"
-        }
+        if (hasNonImages) return "Facebook carousel posts can only contain images"
       }
 
-      // Facebook regular post validations
       if (postType === "post" && hasMedia) {
-        if (selectedFiles.length > 1) {
-          return "Facebook single posts can only have one image or video"
-        }
+        if (selectedFiles.length > 1) return "Facebook single posts can only have one image or video"
+        const file = selectedFiles[0]
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return "Facebook posts must be images or videos"
       }
+    }
+
+    // TikTok-specific validations
+    // TikTok-specific validations
+    if (postToTikTok) {
+      if (!hasMedia) return "TikTok posts require a file (video or image)"
+      if (selectedFiles.length !== 1) return "TikTok posts currently support exactly one file at a time"
+      const file = selectedFiles[0]
+      if (!file.type.startsWith("video/") && !file.type.startsWith("image/")) return "TikTok posts must be video or image files"
+      if (postContent.length > 2200) return "TikTok description cannot exceed 2,200 characters"
     }
 
     // Pinterest-specific validations
     if (postToPinterest) {
-      // Pinterest requires media
-      if (!hasMedia) {
-        return "Pinterest pins require at least one image"
-      }
-
-      // Pinterest only supports images
-      if (selectedFiles.some(file => !file.type.startsWith("image/"))) {
-        return "Pinterest pins only support image files"
-      }
-
-      // Pinterest title validation
-      if (!pinTitle.trim()) {
-        return "Pinterest pins require a title"
-      }
-
-      if (pinTitle.length > 100) {
-        return "Pinterest pin titles cannot exceed 100 characters"
-      }
-
-      if (pinDescription.length > 500) {
-        return "Pinterest pin descriptions cannot exceed 500 characters"
-      }
-
-      // Pinterest only supports single images per pin
-      if (selectedFiles.length > 1) {
-        return "Pinterest pins can only have one image"
-      }
+      if (!hasMedia) return "Pinterest pins require at least one image"
+      if (selectedFiles.some(file => !file.type.startsWith("image/"))) return "Pinterest pins only support image files"
+      if (!pinTitle.trim()) return "Pinterest pins require a title"
+      if (pinTitle.length > 100) return "Pinterest pin titles cannot exceed 100 characters"
+      if (pinDescription.length > 500) return "Pinterest pin descriptions cannot exceed 500 characters"
+      if (selectedFiles.length > 1) return "Pinterest pins can only have one image"
     }
 
     // Threads-specific validations
     if (postToThreads) {
-      // Threads character limits
-      if (postContent.length > 500) {
-        return "Threads posts cannot exceed 500 characters"
-      }
+      if (postContent.length > 500) return "Threads posts cannot exceed 500 characters"
 
-      // if (isScheduled && scheduledDate) {
-      //   return "Threads does not support scheduled posts. Please post immediately."
-      // }
-
-      // Threads media validation
-      // UPDATED Threads media validation (~L2736)
       if (postType !== "carousel" && hasMedia && selectedFiles.length > 1) {
         return "Threads posts can only have one image or video"
       }
@@ -2617,86 +2927,53 @@ export default function DashboardPage() {
       }
     }
 
-    // Cross-platform validations when posting to multiple platforms
+    // Cross-platform validations
     const selectedPlatforms = [
       postToFacebook && "facebook",
       postToInstagram && "instagram",
       postToPinterest && "pinterest",
-      postToThreads && "threads"
+      postToThreads && "threads",
+      postToTikTok && "tiktok"
     ].filter(Boolean)
 
     if (selectedPlatforms.length > 1) {
-      // When posting to multiple platforms, ensure compatibility
       if (postType === "carousel") {
-        // Check if all platforms support carousels
-        if (postToPinterest) {
-          return "Pinterest does not support carousel posts. Please uncheck Pinterest or change post type."
-        }
-        // if (postToThreads) {
-        //   return "Threads does not support carousel posts. Please uncheck Threads or change post type."
-        // }
+        if (postToPinterest) return "Pinterest does not support carousel posts. Please uncheck Pinterest or change post type."
+        if (postToTikTok) return "TikTok does not support carousel posts yet. Please uncheck TikTok or change post type."
       }
 
       if (postType === "reel") {
-        // Check if all platforms support reels
-        if (postToPinterest) {
-          return "Pinterest does not support video reels. Please uncheck Pinterest or change post type."
-        }
+        if (postToPinterest) return "Pinterest does not support video reels. Please uncheck Pinterest or change post type."
       }
 
       if (postType === "pin") {
-        // Pinterest-specific post type
-        if (postToFacebook || postToInstagram || postToThreads) {
+        if (postToFacebook || postToInstagram || postToThreads || postToTikTok) {
           return "Pinterest pin post type can only be used for Pinterest. Please uncheck other platforms or change post type."
         }
       }
 
-      // Use the most restrictive character limit
-      if (postToInstagram && postContent.length > 2200) {
-        return "When posting to Instagram, captions cannot exceed 2,200 characters"
-      }
-      if (postToThreads && postContent.length > 500) {
-        return "When posting to Threads, text cannot exceed 500 characters"
-      }
+      if (postToInstagram && postContent.length > 2200) return "When posting to Instagram, captions cannot exceed 2,200 characters"
+      if (postToThreads && postContent.length > 500) return "When posting to Threads, text cannot exceed 500 characters"
+      if (postToTikTok && postContent.length > 2200) return "When posting to TikTok, descriptions cannot exceed 2,200 characters"
 
-      // Media requirements
-      if ((postToInstagram || postToPinterest) && !hasMedia) {
-        return "When posting to Instagram or Pinterest, media is required"
+      if ((postToInstagram || postToPinterest || postToTikTok) && !hasMedia) {
+        return "Instagram, Pinterest, and TikTok require media"
       }
     }
 
     // File size validations
     const oversizedFiles = selectedFiles.filter((file) => file.size > 100 * 1024 * 1024 * 1024)
-    if (oversizedFiles.length > 0) {
-      return "All files must be smaller than 100MB"
-    }
-
-    // // Scheduling validations
-    // if (scheduledDate && (postToInstagram || postToPinterest || postToThreads)) {
-    //   return "Only Facebook supports scheduled posts. Please uncheck other platforms or post immediately."
-    // }
+    if (oversizedFiles.length > 0) return "All files must be smaller than 100MB"
 
     if (scheduledDate) {
-      if (!scheduledTime) {
-        return "Please select a scheduled time."
-      }
-
-      // Combine date and time for accurate comparison (FIX from previous step)
+      if (!scheduledTime) return "Please select a scheduled time."
       const scheduledDateTimeString = `${scheduledDate}T${scheduledTime}`
       const now = new Date()
       const scheduled = new Date(scheduledDateTimeString)
-
-      if (scheduled <= now) {
-        return "Scheduled time must be in the future"
-      }
-
-      // Facebook allows scheduling up to 6 months in advance
+      if (scheduled <= now) return "Scheduled time must be in the future"
       const sixMonthsFromNow = new Date()
       sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6)
-
-      if (scheduled > sixMonthsFromNow) {
-        return "Posts cannot be scheduled more than 6 months in advance"
-      }
+      if (scheduled > sixMonthsFromNow) return "Posts cannot be scheduled more than 6 months in advance"
     }
 
     return null
@@ -2731,7 +3008,14 @@ export default function DashboardPage() {
       setSelectedPlatforms((prev) => [...prev, "threads"])
     }
 
-    if (facebookAccessToken || instagramAccessToken || pinterestAccessToken || threadsAccessToken) {
+    if (tiktokAccessToken) {
+      localStorage.setItem("tiktok_access_token", tiktokAccessToken)
+      setIsTikTokTokenSet(true)
+      fetchTikTokAccounts(tiktokAccessToken)
+      setSelectedPlatforms((prev) => [...prev, "tiktok"])
+    }
+
+    if (facebookAccessToken || instagramAccessToken || pinterestAccessToken || threadsAccessToken || tiktokAccessToken) {
       setShowTokenModal(false)
     }
   }
@@ -2773,6 +3057,14 @@ export default function DashboardPage() {
     setShowPageModal(false)
   }
 
+  const handleTikTokSelection = (account: TikTokAccount) => {
+    setSelectedTikTokAccount(account)
+    localStorage.setItem("selected_tiktok_account", JSON.stringify(account))
+    fetchTikTokVideos(tiktokAccessToken)
+    fetchTikTokInsights(account)
+    setShowPageModal(false)
+  }
+
   const disconnectFacebook = () => {
     localStorage.removeItem("facebook_access_token")
     localStorage.removeItem("selected_facebook_page")
@@ -2807,6 +3099,17 @@ export default function DashboardPage() {
     setPinterestBoards([])
     setSelectedPlatforms((prev) => prev.filter((p) => p !== "pinterest"))
     alert("Pinterest Disconnected")
+  }
+
+  const disconnectTikTok = () => {
+    localStorage.removeItem("tiktok_access_token")
+    localStorage.removeItem("selected_tiktok_account")
+    setTikTokAccessToken("")
+    setIsTikTokTokenSet(false)
+    setSelectedTikTokAccount(null)
+    setTikTokAccounts([])
+    setSelectedPlatforms((prev) => prev.filter((p) => p !== "tiktok"))
+    alert("TikTok Disconnected")
   }
 
   const disconnectThreads = () => {
@@ -3284,6 +3587,55 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 )}
+                {selectedTikTokAccount && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-black text-white border-black">
+                      <Music className="h-3 w-3 mr-1" />{selectedTikTokAccount.display_name}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          <DropdownMenuLabel>Switch TikTok Account</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {tiktokAccounts.map((account) => (
+                            <DropdownMenuItem
+                              key={account.open_id}
+                              onClick={() => handleTikTokSelection(account)}
+                              className={selectedTikTokAccount?.open_id === account.open_id ? "bg-gray-100" : ""}
+                            >
+                              <div className="flex items-center gap-2">
+                                {account.avatar_url && (
+                                  <Image
+                                    src={account.avatar_url || "/placeholder.svg"}
+                                    alt={account.display_name}
+                                    width={16}
+                                    height={16}
+                                    className="h-4 w-4 rounded-full"
+                                  />
+                                )}
+                                <span className="truncate">{account.display_name}</span>
+                                {selectedTikTokAccount?.open_id === account.open_id && (
+                                  <Check className="h-3 w-3 ml-auto text-green-600" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
+                        onClick={disconnectTikTok}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setShowPageModal(true)}
@@ -3295,7 +3647,7 @@ export default function DashboardPage() {
               </div>
               <Button
                 onClick={() => setShowPostModal(true)}
-                disabled={!isFacebookTokenSet && !isInstagramTokenSet && !isPinterestTokenSet && !isThreadsTokenSet || postingStatus.isPosting}
+                disabled={!isFacebookTokenSet && !isInstagramTokenSet && !isPinterestTokenSet && !isThreadsTokenSet && !isTikTokTokenSet || postingStatus.isPosting}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Post
@@ -3346,10 +3698,11 @@ export default function DashboardPage() {
                       {(facebookInsights?.page_fans || 0) +
                         (instagramInsights?.follower_count || 0) +
                         (pinterestInsights?.follower_count || 0) +
-                        (threadsInsights?.follower_count || 0)}
+                        (threadsInsights?.follower_count || 0) +
+                        (selectedTikTokAccount?.follower_count || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0} | PIN: {pinterestInsights?.follower_count || 0} | TH: {threadsInsights?.follower_count || 0}
+                      FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0} | PIN: {pinterestInsights?.follower_count || 0} | TH: {threadsInsights?.follower_count || 0} | TT: {selectedTikTokAccount?.follower_count || 0}
                     </p>
                   </CardContent>
                 </Card>
@@ -3399,7 +3752,7 @@ export default function DashboardPage() {
                       {facebookPosts.length + instagramPosts.length + pinterestPins.length + threadsPosts.length}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookPosts.length} | IG: {instagramPosts.length} | PIN: {pinterestPins.length} | TH: {threadsPosts.length}
+                      FB: {facebookPosts.length} | IG: {instagramPosts.length} | PIN: {pinterestPins.length} | TH: {threadsPosts.length} | TT: {tiktokVideos.length}
                     </p>
                   </CardContent>
                 </Card>
@@ -3424,6 +3777,10 @@ export default function DashboardPage() {
                   <TabsTrigger value="threads" disabled={!isThreadsTokenSet}>
                     <MessageCircle className="h-4 w-4 mr-2" />
                     Threads
+                  </TabsTrigger>
+                  <TabsTrigger value="tiktok" disabled={!isTikTokTokenSet}>
+                    <Music className="h-4 w-4 mr-2" />
+                    TikTok
                   </TabsTrigger>
                 </TabsList>
 
@@ -3641,6 +3998,66 @@ export default function DashboardPage() {
                         </CardContent>
                       </Card>
                     </div>
+
+                  )}
+                </TabsContent>
+
+                <TabsContent value="tiktok">
+                  {selectedTikTokAccount && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Display Name</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedTikTokAccount.display_name}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Followers</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{selectedTikTokAccount.follower_count}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                  {tiktokInsights && (
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Likes</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{tiktokInsights.likes}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Comments</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{tiktokInsights.comments}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Shares</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{tiktokInsights.shares}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm">Views</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">{tiktokInsights.views}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   )}
                 </TabsContent>
               </Tabs>
@@ -3814,11 +4231,57 @@ export default function DashboardPage() {
                   </div>
                 )}
 
+                {/* TikTok Videos */}
+                {isTikTokTokenSet && tiktokVideos.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Music className="h-5 w-5 text-black" />
+                      TikTok Videos
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {tiktokVideos.map((video) => (
+                        <Card key={video.id}>
+                          <CardContent className="p-4">
+                            <div className="relative w-full h-[325px] mb-3 bg-black rounded-lg overflow-hidden group">
+                              <a href={video.share_url || video.embed_link || "#"} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                                <img
+                                  src={video.cover_image_url}
+                                  alt={video.title}
+                                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="bg-black/50 p-3 rounded-full group-hover:bg-black/70 transition-colors">
+                                    <Play className="h-8 w-8 text-white" fill="white" />
+                                  </div>
+                                </div>
+                                <div className="absolute bottom-2 right-2 text-white text-xs bg-black/50 px-2 py-1 rounded flex items-center gap-1">
+                                  <ExternalLink className="h-3 w-3" />
+                                  Watch on TikTok
+                                </div>
+                              </a>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-2 line-clamp-2">{video.title || "No description"}</p>
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>❤️ {video.like_count || 0}</span>
+                              <span>💬 {video.comment_count || 0}</span>
+                              <span>👁️ {video.view_count || 0}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-2">
+                              {new Date(video.create_time * 1000).toLocaleDateString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* No posts message */}
                 {(!isFacebookTokenSet || facebookPosts.length === 0) &&
                   (!isInstagramTokenSet || instagramPosts.length === 0) &&
                   (!isPinterestTokenSet || pinterestPins.length === 0) &&
-                  (!isThreadsTokenSet || threadsPosts.length === 0) && (
+                  (!isThreadsTokenSet || threadsPosts.length === 0) &&
+                  (!isTikTokTokenSet || tiktokVideos.length === 0) && (
                     <div className="text-center py-12">
                       <p className="text-gray-500">No posts available. Connect your accounts to see posts.</p>
                     </div>
@@ -3828,6 +4291,7 @@ export default function DashboardPage() {
           </Tabs>
         </div>
       </div>
+
 
       <Dialog open={showTokenModal} onOpenChange={setShowTokenModal}>
         <DialogContent className="max-w-md">
@@ -3870,8 +4334,16 @@ export default function DashboardPage() {
               className="w-full bg-black hover:bg-gray-800 text-white"
               disabled={isLoading}
             >
-              <MessageCircle className="h-4 w-4 mr-2" />
               Connect Threads
+            </Button>
+
+            <Button
+              onClick={() => initiateOAuth("tiktok")}
+              className="w-full bg-black hover:bg-gray-800 text-white"
+              disabled={isLoading}
+            >
+              <Music className="h-4 w-4 mr-2" />
+              Connect TikTok
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">You can connect one or multiple platforms</div>
@@ -3899,6 +4371,7 @@ export default function DashboardPage() {
                     setPostType("post")
                     setSelectedFiles([])
                     setFilePreviews([])
+                    setPostToPinterest(false)
                   }}
                 >
                   Regular Post
@@ -3910,6 +4383,7 @@ export default function DashboardPage() {
                     setPostType("reel")
                     setSelectedFiles([])
                     setFilePreviews([])
+                    setPostToPinterest(false)
                   }}
                 >
                   Reel/Video
@@ -3921,6 +4395,7 @@ export default function DashboardPage() {
                     setPostType("carousel")
                     setSelectedFiles([])
                     setFilePreviews([])
+                    setPostToPinterest(false)
                   }}
                 >
                   Carousel
@@ -3949,58 +4424,81 @@ export default function DashboardPage() {
             <div className="space-y-2">
               <Label>Platform Selection</Label>
               <div className="flex space-x-4 flex-wrap gap-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="facebook"
-                    checked={postToFacebook}
-                    // @ts-ignore
-                    onCheckedChange={setPostToFacebook}
-                    disabled={!selectedFacebookPage}
-                  />
-                  <Label htmlFor="facebook" className="flex items-center space-x-2">
-                    <Facebook className="h-4 w-4 text-blue-600" />
-                    <span>Facebook</span>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="instagram"
-                    checked={postToInstagram}
-                    // @ts-ignore
-                    onCheckedChange={setPostToInstagram}
-                    disabled={!selectedInstagramAccount}
-                  />
-                  <Label htmlFor="instagram" className="flex items-center space-x-2">
-                    <Instagram className="h-4 w-4 text-pink-600" />
-                    <span>Instagram</span>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="pinterest"
-                    checked={postToPinterest}
-                    // @ts-ignore
-                    onCheckedChange={setPostToPinterest}
-                    disabled={!selectedPinterestAccount || !selectedPinterestBoard}
-                  />
-                  <Label htmlFor="pinterest" className="flex items-center space-x-2">
-                    <Share2 className="h-4 w-4 text-red-600" />
-                    <span>Pinterest</span>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="threads"
-                    checked={postToThreads}
-                    // @ts-ignore
-                    onCheckedChange={setPostToThreads}
-                    disabled={!selectedThreadsAccount}
-                  />
-                  <Label htmlFor="threads" className="flex items-center space-x-2">
-                    <MessageCircle className="h-4 w-4 text-black" />
-                    <span>Threads</span>
-                  </Label>
-                </div>
+                {postType !== "pin" && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="facebook"
+                        checked={postToFacebook}
+                        // @ts-ignore
+                        onCheckedChange={setPostToFacebook}
+                        disabled={!selectedFacebookPage}
+                      />
+                      <Label htmlFor="facebook" className="flex items-center space-x-2">
+                        <Facebook className="h-4 w-4 text-blue-600" />
+                        <span>Facebook</span>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="instagram"
+                        checked={postToInstagram}
+                        // @ts-ignore
+                        onCheckedChange={setPostToInstagram}
+                        disabled={!selectedInstagramAccount}
+                      />
+                      <Label htmlFor="instagram" className="flex items-center space-x-2">
+                        <Instagram className="h-4 w-4 text-pink-600" />
+                        <span>Instagram</span>
+                      </Label>
+                    </div>
+                  </>
+                )}
+                {postType === "pin" && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="pinterest"
+                      checked={postToPinterest}
+                      // @ts-ignore
+                      onCheckedChange={setPostToPinterest}
+                      disabled={!selectedPinterestAccount || !selectedPinterestBoard}
+                    />
+                    <Label htmlFor="pinterest" className="flex items-center space-x-2">
+                      <Share2 className="h-4 w-4 text-red-600" />
+                      <span>Pinterest</span>
+                    </Label>
+                  </div>
+                )}
+                {postType !== "pin" && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="threads"
+                      checked={postToThreads}
+                      // @ts-ignore
+                      onCheckedChange={setPostToThreads}
+                      disabled={!selectedThreadsAccount}
+                    />
+                    <Label htmlFor="threads" className="flex items-center space-x-2">
+                      <MessageCircle className="h-4 w-4 text-black" />
+                      <span>Threads</span>
+                    </Label>
+                  </div>
+                )}
+                {postType === "reel" && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="tiktok"
+                      checked={postToTikTok}
+                      // @ts-ignore
+                      onCheckedChange={setPostToTikTok}
+                      disabled={!selectedTikTokAccount}
+                    />
+                    <Label htmlFor="tiktok" className="flex items-center space-x-2">
+                      <Music className="h-4 w-4 text-black" />
+                      <span>TikTok</span>
+                    </Label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4099,128 +4597,130 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="post-content">
-                {postType === "reel" ? "Video Description" :
-                  postType === "pin" ? "Pin Description (optional)" :
-                    "Post Content"}
-              </Label>
-              <div className="relative">
-                <Textarea
-                  ref={textareaRef}
-                  id="post-content"
-                  placeholder={
-                    postType === "reel"
-                      ? "Describe your reel... (Type @ to mention people)"
-                      : postType === "carousel"
-                        ? "Caption for your carousel... (Type @ to mention people)"
-                        : postType === "pin"
-                          ? "Additional description for your pin... (Type @ to mention people)"
-                          : "What's on your mind? (Type @ to mention people)"
-                  }
-                  value={postContent}
-                  onChange={handleCaptionChange}
-                  className="min-h-[120px] pr-20"
-                />
+            {postType !== "pin" && (
+              <div className="space-y-2">
+                <Label htmlFor="post-content">
+                  {postType === "reel" ? "Video Description" :
+                    postType === "pin" ? "Pin Description (optional)" :
+                      "Post Content"}
+                </Label>
+                <div className="relative">
+                  <Textarea
+                    ref={textareaRef}
+                    id="post-content"
+                    placeholder={
+                      postType === "reel"
+                        ? "Describe your reel... (Type @ to mention people)"
+                        : postType === "carousel"
+                          ? "Caption for your carousel... (Type @ to mention people)"
+                          : postType === "pin"
+                            ? "Additional description for your pin... (Type @ to mention people)"
+                            : "What's on your mind? (Type @ to mention people)"
+                    }
+                    value={postContent}
+                    onChange={handleCaptionChange}
+                    className="min-h-[120px] pr-20"
+                  />
 
-                {showMentionDropdown && (
-                  <div className="absolute z-50 mt-1 w-64 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                    {isSearchingMentions ? (
-                      <div className="p-2 text-sm text-muted-foreground">Searching...</div>
-                    ) : mentionSuggestions.length > 0 ? (
-                      mentionSuggestions.map((person) => (
-                        <button
-                          key={person.id}
-                          className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex items-center gap-2"
-                          onClick={() => handleSelectMention(person)}
-                        >
-                          <Users className="h-4 w-4" />
-                          {person.name}
-                        </button>
-                      ))
-                    ) : mentionSearchQuery.length >= 2 ? (
-                      <div className="p-2 text-sm text-muted-foreground">No people found</div>
-                    ) : null}
-                  </div>
-                )}
+                  {showMentionDropdown && (
+                    <div className="absolute z-50 mt-1 w-64 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                      {isSearchingMentions ? (
+                        <div className="p-2 text-sm text-muted-foreground">Searching...</div>
+                      ) : mentionSuggestions.length > 0 ? (
+                        mentionSuggestions.map((person) => (
+                          <button
+                            key={person.id}
+                            className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex items-center gap-2"
+                            onClick={() => handleSelectMention(person)}
+                          >
+                            <Users className="h-4 w-4" />
+                            {person.name}
+                          </button>
+                        ))
+                      ) : mentionSearchQuery.length >= 2 ? (
+                        <div className="p-2 text-sm text-muted-foreground">No people found</div>
+                      ) : null}
+                    </div>
+                  )}
 
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setShowEmojiPicker(!showEmojiPicker)
-                        setShowHashtagPicker(false)
-                      }}
-                    >
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                    {showEmojiPicker && (
-                      <div className="absolute top-8 right-0 z-50">
-                        <EmojiPicker onEmojiClick={handleEmojiClick} width={300} height={400} />
-                      </div>
-                    )}
-                  </div>
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    <div className="relative">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowEmojiPicker(!showEmojiPicker)
+                          setShowHashtagPicker(false)
+                        }}
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                      {showEmojiPicker && (
+                        <div className="absolute top-8 right-0 z-50">
+                          <EmojiPicker onEmojiClick={handleEmojiClick} width={300} height={400} />
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setShowHashtagPicker(!showHashtagPicker)
-                        setShowEmojiPicker(false)
-                      }}
-                    >
-                      <Hash className="h-4 w-4" />
-                    </Button>
-                    {showHashtagPicker && (
-                      <div className="absolute top-8 right-0 z-50 w-80 max-h-60 bg-white border rounded-lg shadow-lg overflow-hidden">
-                        <ScrollArea className="h-full">
-                          <div className="p-3">
-                            <h4 className="font-medium mb-2">Popular Hashtags</h4>
-                            <div className="flex flex-wrap gap-1">
-                              {popularHashtags.map((hashtag) => (
-                                <Button
-                                  key={hashtag}
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-6 text-xs bg-transparent"
-                                  onClick={() => handleHashtagClick(hashtag)}
-                                >
-                                  {hashtag}
-                                </Button>
-                              ))}
+                    <div className="relative">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowHashtagPicker(!showHashtagPicker)
+                          setShowEmojiPicker(false)
+                        }}
+                      >
+                        <Hash className="h-4 w-4" />
+                      </Button>
+                      {showHashtagPicker && (
+                        <div className="absolute top-8 right-0 z-50 w-80 max-h-60 bg-white border rounded-lg shadow-lg overflow-hidden">
+                          <ScrollArea className="h-full">
+                            <div className="p-3">
+                              <h4 className="font-medium mb-2">Popular Hashtags</h4>
+                              <div className="flex flex-wrap gap-1">
+                                {popularHashtags.map((hashtag) => (
+                                  <Button
+                                    key={hashtag}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 text-xs bg-transparent"
+                                    onClick={() => handleHashtagClick(hashtag)}
+                                  >
+                                    {hashtag}
+                                  </Button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    )}
+                          </ScrollArea>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div className="flex justify-between text-sm text-muted-foreground mt-1">
+                  <span>
+                    {postContent.length}/
+                    {postToThreads ? "500" :
+                      postToInstagram ? "2,200" :
+                        "63,206"} characters
+                  </span>
+                  <span className="text-xs">
+                    {postToThreads && postContent.length > 500 && (
+                      <span className="text-red-500">Threads limit exceeded</span>
+                    )}
+                    {postToInstagram && postContent.length > 2200 && (
+                      <span className="text-red-500">Instagram limit exceeded</span>
+                    )}
+                    {postToFacebook && postContent.length > 63206 && (
+                      <span className="text-red-500">Facebook limit exceeded</span>
+                    )}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm text-muted-foreground mt-1">
-                <span>
-                  {postContent.length}/
-                  {postToThreads ? "500" :
-                    postToInstagram ? "2,200" :
-                      "63,206"} characters
-                </span>
-                <span className="text-xs">
-                  {postToThreads && postContent.length > 500 && (
-                    <span className="text-red-500">Threads limit exceeded</span>
-                  )}
-                  {postToInstagram && postContent.length > 2200 && (
-                    <span className="text-red-500">Instagram limit exceeded</span>
-                  )}
-                  {postToFacebook && postContent.length > 63206 && (
-                    <span className="text-red-500">Facebook limit exceeded</span>
-                  )}
-                </span>
-              </div>
-            </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="media-upload">
@@ -4304,7 +4804,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {(postToFacebook || postToInstagram || postToPinterest || postToThreads) && (
+            {(postToFacebook || postToInstagram || postToPinterest || postToThreads || postToTikTok) && (
               <>
                 <div className="flex items-center space-x-2">
                   {/* @ts-ignore */}
@@ -4552,9 +5052,46 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {tiktokAccounts.length > 0 && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base">
+                  <Music className="h-5 w-5 text-black" />
+                  TikTok Accounts
+                </Label>
+                <div className="grid gap-2">
+                  {tiktokAccounts.map((account) => (
+                    <Button
+                      key={account.open_id}
+                      variant={selectedTikTokAccount?.open_id === account.open_id ? "default" : "outline"}
+                      className="w-full justify-start h-auto py-3"
+                      onClick={() => handleTikTokSelection(account)}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        {account.avatar_url && (
+                          <Image
+                            src={account.avatar_url || "/placeholder.svg"}
+                            alt={account.display_name}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full"
+                          />
+                        )}
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">{account.display_name}</div>
+                        </div>
+                        {selectedTikTokAccount?.open_id === account.open_id && (
+                          <Check className="h-5 w-5 text-green-600" />
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }

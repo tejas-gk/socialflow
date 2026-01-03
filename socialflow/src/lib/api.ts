@@ -487,7 +487,7 @@ class ApiClient {
     files.forEach((f) => form.append("files", f, f.name))
 
     const url = `${this.baseUrl}/api/social/post-multipart`
-    
+
     const headers = new Headers();
     if (typeof window !== "undefined" && window.__clerk_user_id) {
       headers.append("x-clerk-user-id", window.__clerk_user_id);
@@ -503,10 +503,10 @@ class ApiClient {
       const errorText = await response.text()
       throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`)
     }
-    
+
     return response.json();
   }
-  
+
   // Authentication methods
   async getAuthStatus(): Promise<AuthStatus> {
     return this.request("/auth/status")
