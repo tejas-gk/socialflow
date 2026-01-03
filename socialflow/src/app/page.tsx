@@ -1359,6 +1359,32 @@ export default function DashboardPage() {
     }
   }, [selectedThreadsAccount])
 
+  // TikTok Data Fetching
+  useEffect(() => {
+    if (selectedTikTokAccount && tiktokAccessToken) {
+      fetchTikTokVideos(tiktokAccessToken)
+      fetchTikTokInsights(selectedTikTokAccount)
+    }
+  }, [selectedTikTokAccount, tiktokAccessToken])
+
+  // TikTok Analytics Aggregation (Calculate totals from fetched videos)
+  useEffect(() => {
+    if (selectedTikTokAccount && tiktokVideos.length > 0) {
+      const totalLikes = tiktokVideos.reduce((acc, video) => acc + (video.like_count || 0), 0)
+      const totalComments = tiktokVideos.reduce((acc, video) => acc + (video.comment_count || 0), 0)
+      const totalShares = tiktokVideos.reduce((acc, video) => acc + (video.share_count || 0), 0)
+      const totalViews = tiktokVideos.reduce((acc, video) => acc + (video.view_count || 0), 0)
+
+      setTikTokInsights({
+        likes: totalLikes,
+        comments: totalComments,
+        shares: totalShares,
+        views: totalViews,
+        followers: selectedTikTokAccount.follower_count || 0
+      })
+    }
+  }, [selectedTikTokAccount, tiktokVideos])
+
   useEffect(() => {
     if (selectedFacebookPage && facebookPosts.length > 0) {
       fetchPostAnalytics(selectedFacebookPage)
@@ -3717,10 +3743,11 @@ export default function DashboardPage() {
                       {(facebookInsights?.page_impressions || 0) +
                         (instagramInsights?.impressions || 0) +
                         (pinterestInsights?.pin_impressions || 0) +
-                        (threadsInsights?.impressions || 0)}
+                        (threadsInsights?.impressions || 0) +
+                        (tiktokInsights?.views || 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0} | PIN: {pinterestInsights?.pin_impressions || 0} | TH: {threadsInsights?.impressions || 0}
+                      FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0} | PIN: {pinterestInsights?.pin_impressions || 0} | TH: {threadsInsights?.impressions || 0} | TT: {tiktokInsights?.views || 0}
                     </p>
                   </CardContent>
                 </Card>
@@ -3749,7 +3776,7 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {facebookPosts.length + instagramPosts.length + pinterestPins.length + threadsPosts.length}
+                      {facebookPosts.length + instagramPosts.length + pinterestPins.length + threadsPosts.length + tiktokVideos.length}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       FB: {facebookPosts.length} | IG: {instagramPosts.length} | PIN: {pinterestPins.length} | TH: {threadsPosts.length} | TT: {tiktokVideos.length}
