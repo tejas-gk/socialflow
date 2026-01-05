@@ -63,7 +63,8 @@ const executeInstagramPost = async (job: any) => {
 
     // --- 1. CAROUSEL LOGIC ---
     if (isCarousel) {
-        let childContainerIds: string[] = [];
+        // @ts-ignore
+        const childContainerIds: string[] = [];
 
         // Ensure fileTypes is present and correct length (safety check, should be fine due to previous fix)
         if (!fileTypes || fileTypes.length < fileUrls.length) {
@@ -305,7 +306,8 @@ const executePostToThreads = async (job: any) => {
     // ADDED: CAROUSEL LOGIC
     if (fileUrls.length > 1 && postType === "carousel") {
         // --- CAROUSEL LOGIC ---
-        let childContainerIds: string[] = [];
+        // @ts-ignore
+        const childContainerIds: string[] = [];
 
         // FIX: Implement robust check for fileTypes array (from previous fix)
         if (!fileTypes || !Array.isArray(fileTypes) || fileTypes.length < fileUrls.length) {
@@ -448,6 +450,129 @@ const executePostToThreads = async (job: any) => {
 }
 
 
+// --- TIKTOK POSTING LOGIC (NEW) ---
+
+const executePostToTikTok = async (job: any) => {
+    const TIKTOK_PROXY_URL = `${HOST_URL}/api/tiktok/proxy?endpoint=/post/publish/content/init/`;
+
+    // Deconstruct job payload
+    const { tiktok, fileUrls, postContent, fileTypes } = job;
+
+    if (!tiktok || !fileUrls.length) {
+        throw new Error("TikTok job missing account info or media.");
+    }
+
+    const { accessToken } = tiktok;
+    const isPhoto = fileTypes && fileTypes[0].startsWith("image/");
+    const rawUrl = fileUrls[0];
+
+    // Disable Photo Posting for TikTok (User Request)
+    if (isPhoto) {
+        throw new Error("TikTok Photo posting is not supported. Please schedule videos only.");
+    }
+
+    // --- VIDEO (FILE_UPLOAD) FLOW ---
+    // If we are here, it is NOT a photo (and we assume it's a video)
+    if (true) {
+        console.log(`[CRON: TikTok] Starting FILE_UPLOAD for Video...`);
+
+        // 1. Fetch the video file (buffer)
+        const fileResponse = await fetch(rawUrl);
+        if (!fileResponse.ok) throw new Error("Failed to fetch video file from storage");
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const videoSize = arrayBuffer.byteLength;
+
+        console.log(`[CRON: TikTok] Video fetched. Size: ${videoSize} bytes`);
+
+        // 2. Prepare Chunking Logic (Match Frontend)
+        const CHUNK_SIZE_LIMIT = 5 * 1024 * 1024; // 5MB limit check
+        let chunkSize = videoSize;
+        let totalChunkCount = 1;
+
+        if (videoSize > CHUNK_SIZE_LIMIT) {
+            chunkSize = 10 * 1024 * 1024; // 10 MB per chunk 
+            if (chunkSize > videoSize) chunkSize = videoSize;
+
+            if (videoSize < chunkSize) {
+                chunkSize = videoSize;
+                totalChunkCount = 1;
+            } else {
+                totalChunkCount = Math.ceil(videoSize / chunkSize);
+            }
+        }
+
+        console.log(`[CRON: TikTok] Video Strategy: Size=${videoSize}, ChunkSize=${chunkSize}, TotalChunks=${totalChunkCount}`);
+
+        // 3. Initialize Video Upload
+        const initResponse = await fetch(`${HOST_URL}/api/tiktok/proxy?endpoint=/post/publish/video/init/`, {
+            method: "POST",
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                post_info: {
+                    title: postContent.substring(0, 150) || "Scheduled Video",
+                    privacy_level: "SELF_ONLY",
+                    disable_duet: true,
+                    disable_comment: true,
+                    disable_stitch: true,
+                    video_cover_timestamp_ms: 1000
+                },
+                source_info: {
+                    source: "FILE_UPLOAD",
+                    video_size: videoSize,
+                    chunk_size: chunkSize,
+                    total_chunk_count: totalChunkCount
+                }
+            })
+        });
+
+        if (!initResponse.ok) {
+            const err = await initResponse.json();
+            throw new Error("TikTok Video Init Failed: " + JSON.stringify(err));
+        }
+
+        const initData = await initResponse.json();
+        const uploadUrl = initData.data.upload_url;
+        const publishId = initData.data.publish_id;
+
+        console.log(`[CRON: TikTok] Upload initialized. Publish ID: ${publishId}`);
+
+        // 4. Upload Video Chunks
+        const buffer = Buffer.from(arrayBuffer); // Convert only once
+
+        for (let i = 0; i < totalChunkCount; i++) {
+            const start = i * chunkSize;
+            let end = start + chunkSize;
+            if (i === totalChunkCount - 1) end = videoSize;
+
+            const chunkBuffer = buffer.subarray(start, end);
+
+            console.log(`[CRON: TikTok] Uploading chunk ${i + 1}/${totalChunkCount} (bytes ${start}-${end - 1})...`);
+
+            const uploadResponse = await fetch(uploadUrl, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "video/mp4",
+                    "Content-Range": `bytes ${start}-${end - 1}/${videoSize}`
+                },
+                body: chunkBuffer
+            });
+
+            if (!uploadResponse.ok) {
+                const errText = await uploadResponse.text();
+                throw new Error(`TikTok Chunk ${i + 1} Upload Failed (${uploadResponse.status}): ${errText}`);
+            }
+        }
+
+        console.log(`[CRON: TikTok] All chunks uploaded successfully.`);
+        return; // Done
+    }
+
+}
+
+
 const executePostToFacebook = async (job: any) => {
     // This runs if Facebook is part of a multi-platform cron job
     console.log(`[CRON: Facebook] Executing post for page ${job.facebook.pageName} (Simulated)`);
@@ -461,22 +586,34 @@ export async function POST(request: NextRequest) {
         const job = await request.json();
         const { platformsToSchedule, scheduledTimestamp } = job;
 
-        console.log(`[CRON EXECUTION] Received job (Time: ${new Date(scheduledTimestamp * 1000).toISOString()}) for platforms: ${platformsToSchedule.join(', ')}`);
+        console.log(`[CRON EXECUTION] Received job (Time: ${new Date(scheduledTimestamp * 1000).toISOString()})`);
+        console.log(`[CRON EXECUTION] Platforms requested: ${JSON.stringify(platformsToSchedule)}`);
+        console.log(`[CRON EXECUTION] Job Payload Keys: ${Object.keys(job).join(', ')}`);
 
         // In a production environment, add a security check here (e.g., secret header)
 
         const executionPromises = [];
 
         for (const platform of platformsToSchedule) {
+            console.log(`[CRON EXECUTION] Checking platform: ${platform}`);
+
             if (platform === "instagram" && job.instagram) {
                 executionPromises.push(executeInstagramPost(job));
             } else if (platform === "pinterest" && job.pinterest) {
                 executionPromises.push(executePostToPinterest(job));
             } else if (platform === "threads" && job.threads) {
-                // ✅ Execute Threads Logic
                 executionPromises.push(executePostToThreads(job));
+            } else if (platform === "tiktok") {
+                if (job.tiktok) {
+                    console.log("[CRON EXECUTION] Triggering TikTok logic...");
+                    executionPromises.push(executePostToTikTok(job));
+                } else {
+                    console.error("[CRON EXECUTION] TikTok requested but 'job.tiktok' data is MISSING!");
+                }
             } else if (platform === "facebook" && job.facebook) {
                 executionPromises.push(executePostToFacebook(job));
+            } else {
+                console.warn(`[CRON EXECUTION] Skipped platform '${platform}' - mismatched data or unknown platform.`);
             }
         }
 

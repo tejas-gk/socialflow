@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "**i.pinimg.com", // Allows all pinterest CDN subdomains
       },
+      {
+        protocol: "https",
+        hostname: "**p16-pu-sign-no.tiktokcdn-eu.com", // Allows all tiktok CDN subdomains
+      },
     ],
   },
 };

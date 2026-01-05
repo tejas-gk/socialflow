@@ -14,7 +14,7 @@ import Link from 'next/link'
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState('overview')
-  
+
   // Check connection status for both platforms
   const { data: connectionStatus } = useSWR(
     'connection-status',
@@ -34,8 +34,8 @@ export default function AnalyticsPage() {
     () => apiClient.getFacebookPagesAnalytics().catch(() => ({ data: [] }))
   )
 
-const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
-  const hasFacebookPages = (facebookPages?.data?.length ??0)> 0
+  const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
+  const hasFacebookPages = (facebookPages?.data?.length ?? 0) > 0
   const isInstagramConnected = connectionStatus?.instagram?.connected
   const isFacebookConnected = connectionStatus?.facebook?.connected
 
@@ -185,8 +185,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                     <TrendingUp className="h-4 w-4" />
                     <span>Overview</span>
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="facebook" 
+                  <TabsTrigger
+                    value="facebook"
                     disabled={!isFacebookConnected || !hasFacebookPages}
                     className="flex items-center space-x-2"
                   >
@@ -198,8 +198,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                       </Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="instagram" 
+                  <TabsTrigger
+                    value="instagram"
                     disabled={!isInstagramConnected || !hasInstagramAccounts}
                     className="flex items-center space-x-2"
                   >
@@ -229,8 +229,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                       <CardContent>
                         <div className="space-y-2">
                           <p className="text-sm text-muted-foreground">
-                            Status: {isFacebookConnected ? 
-                              <span className="text-green-600 font-medium">Connected</span> : 
+                            Status: {isFacebookConnected ?
+                              <span className="text-green-600 font-medium">Connected</span> :
                               <span className="text-red-600 font-medium">Not Connected</span>
                             }
                           </p>
@@ -242,8 +242,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                         </div>
                         <div className="mt-4">
                           {isFacebookConnected && hasFacebookPages ? (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => setActiveTab('facebook')}
                             >
@@ -251,7 +251,7 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                             </Button>
                           ) : (
                             // --- START OF FIX ---
-                            <Button 
+                            <Button
                               size="sm"
                               onClick={() => window.location.href = apiClient.getFacebookAuthUrl()}
                             >
@@ -277,8 +277,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                       <CardContent>
                         <div className="space-y-2">
                           <p className="text-sm text-muted-foreground">
-                            Status: {isInstagramConnected ? 
-                              <span className="text-green-600 font-medium">Connected</span> : 
+                            Status: {isInstagramConnected ?
+                              <span className="text-green-600 font-medium">Connected</span> :
                               <span className="text-red-600 font-medium">Not Connected</span>
                             }
                           </p>
@@ -290,8 +290,8 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                         </div>
                         <div className="mt-4">
                           {isInstagramConnected && hasInstagramAccounts ? (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => setActiveTab('instagram')}
                             >
@@ -299,7 +299,7 @@ const hasInstagramAccounts = (instagramAccounts?.length ?? 0) > 0
                             </Button>
                           ) : (
                             // --- START OF FIX ---
-                            <Button 
+                            <Button
                               size="sm"
                               onClick={() => window.location.href = apiClient.getInstagramAuthUrl()}
                             >
