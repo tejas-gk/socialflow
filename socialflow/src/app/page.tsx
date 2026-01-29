@@ -4,243 +4,33 @@ import type React from "react"
 
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import {
-  Facebook,
-  Instagram,
-  Settings,
-  Eye,
-  Users,
-  BarChart3,
-  Target,
-  Plus,
-  Calendar,
-  Send,
-  X,
-  ChevronDown,
-  Check,
-  Smile,
-  Hash,
-  AlertCircle,
-  Loader2,
-  Upload,
-  CheckCircle,
-  Clock,
-  Share2,
-  MessageCircle,
-  Music,
-  Play,
-  ExternalLink,
-} from "lucide-react"
-import Image from "next/image"
+import {  Facebook,  Instagram,  Share2,  MessageCircle,  Music,  AlertCircle,} from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import EmojiPicker from "emoji-picker-react"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Progress } from "@/components/ui/progress"
 import { useEdgeStore } from "@/lib/edgestore"
-import { Video } from "@/components/ui/video"
-interface FacebookPage {
-  id: string
-  name: string
-  access_token: string
-  picture?: {
-    data: {
-      url: string
-    }
-  }
-}
+import { StatsOverview } from "@/components/dashboard/StatsOverview"
+import { AnalyticsTabs } from "@/components/dashboard/AnalyticsTabs"
+import { PostsTab } from "@/components/dashboard/PostsTab"
+import { Header } from "@/components/dashboard/Header"
+import { CreatePostDialog } from "@/components/dashboard/CreatePostDialog"
+import { PageSelectionDialog } from "@/components/dashboard/PageSelectionDialog"
+import { ProgressBanners } from "@/components/dashboard/ProgressBanners"
+import {  FacebookPage,  InstagramAccount,  PinterestBoard,  PinterestAccount,  ThreadsAccount,  FacebookPost,  InstagramPost,
+  PinterestPin,
+  ThreadsPost,
+  FacebookInsights,
+  InstagramInsights,
+  PinterestInsights,
+  ThreadsInsights,
+  Demographics,
+  TikTokAccount,
+  TikTokVideo,
+  TikTokInsights,
+  PostAnalytics
+} from "@/types/social-types"
 
-interface InstagramAccount {
-  id: string
-  username: string
-  name: string
-  profile_picture_url?: string
-  followers_count?: number
-  media_count?: number
-}
 
-interface PinterestBoard {
-  id: string
-  name: string
-  description?: string
-  pin_count?: number
-}
-
-interface PinterestAccount {
-  id: string
-  username: string
-  full_name?: string
-  profile_picture?: string
-  board_count?: number
-}
-
-interface ThreadsAccount {
-  id: string
-  username: string
-  name: string
-  profile_picture_url?: string
-  followers_count?: number
-}
-
-interface FacebookPost {
-  id: string
-  message?: string
-  story?: string
-  full_picture?: string
-  created_time: string
-  likes?: {
-    summary: {
-      total_count: number
-    }
-  }
-  comments?: {
-    summary: {
-      total_count: number
-    }
-  }
-  shares?: {
-    count: number
-  }
-}
-
-interface InstagramPost {
-  id: string
-  caption?: string
-  media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM"
-  media_url?: string
-  thumbnail_url?: string
-  timestamp: string
-  like_count?: number
-  comments_count?: number
-  permalink?: string
-}
-
-interface PinterestPin {
-  id: string
-  title?: string
-  description?: string
-  // API v5 nests image data inside 'media'
-  media?: {
-    media_type?: string
-    images?: {
-      [key: string]: {
-        url: string
-        width?: number
-        height?: number
-      }
-    }
-  }
-  created_at: string
-  // These metrics might not be available in the basic list view, keeping them optional
-  like_count?: number
-  comment_count?: number
-  link?: string
-}
-
-interface ThreadsPost {
-  id: string
-  text?: string
-  media_url?: string
-  timestamp: string
-  like_count?: number
-  reply_count?: number
-}
-
-interface FacebookInsights {
-  page_impressions: number
-  page_engaged_users: number
-  page_fans: number
-  page_views: number
-  page_posts_impressions: number
-  page_video_views: number
-  page_actions_post_reactions_total: number
-}
-
-interface InstagramInsights {
-  impressions: number
-  reach: number
-  profile_views: number
-  website_clicks: number
-  follower_count: number
-  media_count: number
-}
-
-interface PinterestInsights {
-  pin_impressions: number
-  total_engagements: number
-  pin_clicks: number
-  outbound_clicks: number
-  follower_count: number
-  pin_count: number
-}
-
-interface ThreadsInsights {
-  impressions: number
-  reach: number
-  profile_views: number
-  follower_count: number
-  engagement: number
-}
-
-interface Demographics {
-  age_gender: any
-  countries: any
-  cities: any
-}
-
-interface TikTokAccount {
-  open_id: string
-  union_id: string
-  display_name: string
-  avatar_url?: string
-  follower_count?: number
-}
-
-interface TikTokVideo {
-  id: string
-  title: string
-  cover_image_url?: string
-  video_url?: string
-  embed_html?: string
-  embed_link?: string
-  share_url?: string
-  create_time: number
-  like_count?: number
-  comment_count?: number
-  share_count?: number
-  view_count?: number
-}
-
-interface TikTokInsights {
-  likes: number
-  comments: number
-  shares: number
-  views: number
-  followers: number
-}
-
-interface PostAnalytics {
-  post_id: string
-  impressions: number
-  reach: number
-  engagement: number
-  clicks: number
-}
 
 export default function DashboardPage() {
   // EdgeStore hook
@@ -3353,339 +3143,39 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Posting Status Banner */}
-      {postingStatus.isPosting && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white p-4 shadow-lg">
-          <div className="container mx-auto">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4 flex-1">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <div className="flex-1">
-                  <p className="font-medium">{postingStatus.message}</p>
-                  <div className="flex items-center space-x-4 text-sm text-blue-100">
-                    <span>{postingStatus.currentStep}</span>
-                    {postingStatus.estimatedTime && (
-                      <span className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Est: {postingStatus.estimatedTime}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="w-48">
-                <Progress value={postingStatus.progress} className="h-2 bg-blue-700" />
-                <p className="text-xs text-blue-100 text-right mt-1">{Math.round(postingStatus.progress)}%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProgressBanners postingStatus={postingStatus} uploadProgress={uploadProgress} />
 
-      {/* Upload Progress Banner */}
-      {uploadProgress.isUploading && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-green-600 text-white p-4 shadow-lg">
-          <div className="container mx-auto">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4 flex-1">
-                <Upload className="h-5 w-5" />
-                <div className="flex-1">
-                  <p className="font-medium">
-                    Uploading media ({uploadProgress.currentFileIndex}/{uploadProgress.totalFiles})
-                  </p>
-                  <p className="text-sm text-green-100">Current: {uploadProgress.currentFile}</p>
-                </div>
-              </div>
-              <div className="w-48">
-                <Progress value={uploadProgress.progress} className="h-2 bg-green-700" />
-                <p className="text-xs text-green-100 text-right mt-1">{Math.round(uploadProgress.progress)}%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-black font-serif text-primary">Social Media Dashboard</h1>
-            </div>
-            <div className="flex items-center space-x-2 md:space-x-4">
-              <div className="flex items-center gap-4">
-                {selectedFacebookPage && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
-                      <Facebook className="h-3 w-3 mr-1" />
-                      {selectedFacebookPage.name}
-                      <DropdownMenu open={showPageSwitcher} onOpenChange={setShowPageSwitcher}>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel>Switch Facebook Page</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {facebookPages.map((page) => (
-                            <DropdownMenuItem
-                              key={page.id}
-                              onClick={() => {
-                                handlePageSelection(page)
-                                setShowPageSwitcher(false)
-                              }}
-                              className={selectedFacebookPage?.id === page.id ? "bg-blue-50" : ""}
-                            >
-                              <div className="flex items-center gap-2">
-                                {page.picture?.data?.url && (
-                                  <Image
-                                    src={page.picture.data.url || "/placeholder.svg"}
-                                    alt={page.name}
-                                    width={16}
-                                    height={16}
-                                    className="h-4 w-4 rounded-full"
-                                  />
-                                )}
-                                <span className="truncate">{page.name}</span>
-                                {selectedFacebookPage?.id === page.id && (
-                                  <Check className="h-3 w-3 ml-auto text-green-600" />
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
-                        onClick={disconnectFacebook}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  </div>
-                )}
-                {selectedInstagramAccount && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-pink-50 text-pink-700 border-pink-200">
-                      <Instagram className="h-3 w-3 mr-1" />@{selectedInstagramAccount.username}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel>Switch Instagram Account</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {instagramAccounts.map((account) => (
-                            <DropdownMenuItem
-                              key={account.id}
-                              onClick={() => handleInstagramSelection(account)}
-                              className={selectedInstagramAccount?.id === account.id ? "bg-pink-50" : ""}
-                            >
-                              <div className="flex items-center gap-2">
-                                {account.profile_picture_url && (
-                                  <Image
-                                    src={account.profile_picture_url || "/placeholder.svg"}
-                                    alt={account.username}
-                                    width={16}
-                                    height={16}
-                                    className="h-4 w-4 rounded-full"
-                                  />
-                                )}
-                                <span className="truncate">@{account.username}</span>
-                                {selectedInstagramAccount?.id === account.id && (
-                                  <Check className="h-3 w-3 ml-auto text-green-600" />
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
-                        onClick={disconnectInstagram}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  </div>
-                )}
-                {selectedPinterestAccount && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200">
-                      <Share2 className="h-3 w-3 mr-1" />@{selectedPinterestAccount.username}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel>Switch Pinterest Account</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {pinterestAccounts.map((account) => (
-                            <DropdownMenuItem
-                              key={account.id}
-                              onClick={() => handlePinterestSelection(account)}
-                              className={selectedPinterestAccount?.id === account.id ? "bg-red-50" : ""}
-                            >
-                              <div className="flex items-center gap-2">
-                                {account.profile_picture && (
-                                  <Image
-                                    src={account.profile_picture || "/placeholder.svg"}
-                                    alt={account.username}
-                                    width={16}
-                                    height={16}
-                                    className="h-4 w-4 rounded-full"
-                                  />
-                                )}
-                                <span className="truncate">@{account.username}</span>
-                                {selectedPinterestAccount?.id === account.id && (
-                                  <Check className="h-3 w-3 ml-auto text-green-600" />
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
-                        onClick={disconnectPinterest}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  </div>
-                )}
-                {selectedThreadsAccount && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-black text-white border-black">
-                      <MessageCircle className="h-3 w-3 mr-1" />@{selectedThreadsAccount.username}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel>Switch Threads Account</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {threadsAccounts.map((account) => (
-                            <DropdownMenuItem
-                              key={account.id}
-                              onClick={() => handleThreadsSelection(account)}
-                              className={selectedThreadsAccount?.id === account.id ? "bg-gray-100" : ""}
-                            >
-                              <div className="flex items-center gap-2">
-                                {account.profile_picture_url && (
-                                  <Image
-                                    src={account.profile_picture_url || "/placeholder.svg"}
-                                    alt={account.username}
-                                    width={16}
-                                    height={16}
-                                    className="h-4 w-4 rounded-full"
-                                  />
-                                )}
-                                <span className="truncate">@{account.username}</span>
-                                {selectedThreadsAccount?.id === account.id && (
-                                  <Check className="h-3 w-3 ml-auto text-green-600" />
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
-                        onClick={disconnectThreads}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  </div>
-                )}
-                {selectedTikTokAccount && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-black text-white border-black">
-                      <Music className="h-3 w-3 mr-1" />{selectedTikTokAccount.display_name}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-1">
-                            <ChevronDown className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel>Switch TikTok Account</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {tiktokAccounts.map((account) => (
-                            <DropdownMenuItem
-                              key={account.open_id}
-                              onClick={() => handleTikTokSelection(account)}
-                              className={selectedTikTokAccount?.open_id === account.open_id ? "bg-gray-100" : ""}
-                            >
-                              <div className="flex items-center gap-2">
-                                {account.avatar_url && (
-                                  <Image
-                                    src={account.avatar_url || "/placeholder.svg"}
-                                    alt={account.display_name}
-                                    width={16}
-                                    height={16}
-                                    className="h-4 w-4 rounded-full"
-                                  />
-                                )}
-                                <span className="truncate">{account.display_name}</span>
-                                {selectedTikTokAccount?.open_id === account.open_id && (
-                                  <Check className="h-3 w-3 ml-auto text-green-600" />
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 text-red-500 hover:text-red-700"
-                        onClick={disconnectTikTok}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => setShowPageModal(true)}
-                  title="Select Pages"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Select Accounts
-                </Button>
-              </div>
-              <Button
-                onClick={() => setShowPostModal(true)}
-                disabled={!isFacebookTokenSet && !isInstagramTokenSet && !isPinterestTokenSet && !isThreadsTokenSet && !isTikTokTokenSet || postingStatus.isPosting}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Post
-              </Button>
-              <Button variant="outline" onClick={() => setShowTokenModal(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header
+        selectedFacebookPage={selectedFacebookPage}
+        selectedInstagramAccount={selectedInstagramAccount}
+        selectedPinterestAccount={selectedPinterestAccount}
+        selectedThreadsAccount={selectedThreadsAccount}
+        selectedTikTokAccount={selectedTikTokAccount}
+        facebookPages={facebookPages}
+        instagramAccounts={instagramAccounts}
+        pinterestAccounts={pinterestAccounts}
+        threadsAccounts={threadsAccounts}
+        tiktokAccounts={tiktokAccounts}
+        onSelectFacebookPage={handlePageSelection}
+        onSelectInstagramAccount={handleInstagramSelection}
+        onSelectPinterestAccount={handlePinterestSelection}
+        onSelectThreadsAccount={handleThreadsSelection}
+        onSelectTikTokAccount={handleTikTokSelection}
+        disconnectFacebook={disconnectFacebook}
+        disconnectInstagram={disconnectInstagram}
+        disconnectPinterest={disconnectPinterest}
+        disconnectThreads={disconnectThreads}
+        disconnectTikTok={disconnectTikTok}
+        openPageModal={() => setShowPageModal(true)}
+        openPostModal={() => setShowPostModal(true)}
+        openTokenModal={() => setShowTokenModal(true)}
+        isFacebookTokenSet={isFacebookTokenSet}
+        isInstagramTokenSet={isInstagramTokenSet}
+        isPinterestTokenSet={isPinterestTokenSet}
+        isThreadsTokenSet={isThreadsTokenSet}
+        isTikTokTokenSet={isTikTokTokenSet}
+        isPosting={postingStatus.isPosting}
+      />
 
       <div className="container mx-auto px-4 py-8" style={{ marginTop: postingStatus.isPosting || uploadProgress.isUploading ? '80px' : '0' }}>
         <div className="space-y-8">
@@ -3713,611 +3203,60 @@ export default function DashboardPage() {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Followers</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_fans || 0) +
-                        (instagramInsights?.follower_count || 0) +
-                        (pinterestInsights?.follower_count || 0) +
-                        (threadsInsights?.follower_count || 0) +
-                        (selectedTikTokAccount?.follower_count || 0)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_fans || 0} | IG: {instagramInsights?.follower_count || 0} | PIN: {pinterestInsights?.follower_count || 0} | TH: {threadsInsights?.follower_count || 0} | TT: {selectedTikTokAccount?.follower_count || 0}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Impressions</CardTitle>
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_impressions || 0) +
-                        (instagramInsights?.impressions || 0) +
-                        (pinterestInsights?.pin_impressions || 0) +
-                        (threadsInsights?.impressions || 0) +
-                        (tiktokInsights?.views || 0)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_impressions || 0} | IG: {instagramInsights?.impressions || 0} | PIN: {pinterestInsights?.pin_impressions || 0} | TH: {threadsInsights?.impressions || 0} | TT: {tiktokInsights?.views || 0}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Reach</CardTitle>
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {(facebookInsights?.page_engaged_users || 0) +
-                        (instagramInsights?.reach || 0) +
-                        (threadsInsights?.reach || 0)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      FB: {facebookInsights?.page_engaged_users || 0} | IG: {instagramInsights?.reach || 0} | TH: {threadsInsights?.reach || 0}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {facebookPosts.length + instagramPosts.length + pinterestPins.length + threadsPosts.length + tiktokVideos.length}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      FB: {facebookPosts.length} | IG: {instagramPosts.length} | PIN: {pinterestPins.length} | TH: {threadsPosts.length} | TT: {tiktokVideos.length}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+              <StatsOverview
+                facebookInsights={facebookInsights}
+                instagramInsights={instagramInsights}
+                pinterestInsights={pinterestInsights}
+                threadsInsights={threadsInsights}
+                tiktokInsights={tiktokInsights}
+                selectedTikTokAccount={selectedTikTokAccount}
+                facebookPosts={facebookPosts}
+                instagramPosts={instagramPosts}
+                pinterestPins={pinterestPins}
+                threadsPosts={threadsPosts}
+                tiktokVideos={tiktokVideos}
+              />
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-6">
-              <Tabs value={analyticsTab} onValueChange={setAnalyticsTab}>
-                <TabsList className="flex overflow-x-auto">
-                  <TabsTrigger value="facebook" disabled={!isFacebookTokenSet}>
-                    <Facebook className="h-4 w-4 mr-2" />
-                    Facebook
-                  </TabsTrigger>
-                  <TabsTrigger value="instagram" disabled={!isInstagramTokenSet}>
-                    <Instagram className="h-4 w-4 mr-2" />
-                    Instagram
-                  </TabsTrigger>
-                  <TabsTrigger value="pinterest" disabled={!isPinterestTokenSet}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Pinterest
-                  </TabsTrigger>
-                  <TabsTrigger value="threads" disabled={!isThreadsTokenSet}>
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    Threads
-                  </TabsTrigger>
-                  <TabsTrigger value="tiktok" disabled={!isTikTokTokenSet}>
-                    <Music className="h-4 w-4 mr-2" />
-                    TikTok
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="facebook">
-                  {facebookInsights && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Page Fans</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{facebookInsights.page_fans}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Page Impressions</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{facebookInsights.page_impressions}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Engaged Users</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{facebookInsights.page_engaged_users}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Page Views</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{facebookInsights.page_views}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-
-                </TabsContent>
-
-                <TabsContent value="instagram">
-                  {selectedInstagramAccount && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Username</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedInstagramAccount.username}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Followers</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedInstagramAccount.followers_count}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                  {instagramInsights && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Website Clicks</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{instagramInsights.website_clicks}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Impressions</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{instagramInsights.impressions}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Reach</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{instagramInsights.reach}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Profile Views</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{instagramInsights.profile_views}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="pinterest">
-                  {selectedPinterestAccount && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Username</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedPinterestAccount.username}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Boards</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{pinterestBoards.length}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                  {pinterestInsights && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Pin Impressions</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{pinterestInsights.pin_impressions}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Total Engagements</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{pinterestInsights.total_engagements}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Pin Clicks</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{pinterestInsights.pin_clicks}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Outbound Clicks</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{pinterestInsights.outbound_clicks}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="threads">
-                  {selectedThreadsAccount && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Username</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedThreadsAccount.username}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Followers</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedThreadsAccount.followers_count}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                  {threadsInsights && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Impressions</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{threadsInsights.impressions}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Reach</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{threadsInsights.reach}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Profile Views</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{threadsInsights.profile_views}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Engagement</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{threadsInsights.engagement}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                  )}
-                </TabsContent>
-
-                <TabsContent value="tiktok">
-                  {selectedTikTokAccount && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Display Name</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedTikTokAccount.display_name}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Followers</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{selectedTikTokAccount.follower_count}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                  {tiktokInsights && (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Likes</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{tiktokInsights.likes}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Comments</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{tiktokInsights.comments}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Shares</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{tiktokInsights.shares}</div>
-                        </CardContent>
-                      </Card>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Views</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">{tiktokInsights.views}</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+              <AnalyticsTabs
+                analyticsTab={analyticsTab}
+                setAnalyticsTab={setAnalyticsTab}
+                isFacebookTokenSet={isFacebookTokenSet}
+                isInstagramTokenSet={isInstagramTokenSet}
+                isPinterestTokenSet={isPinterestTokenSet}
+                isThreadsTokenSet={isThreadsTokenSet}
+                isTikTokTokenSet={isTikTokTokenSet}
+                facebookInsights={facebookInsights}
+                instagramInsights={instagramInsights}
+                pinterestInsights={pinterestInsights}
+                threadsInsights={threadsInsights}
+                tiktokInsights={tiktokInsights}
+                selectedTikTokAccount={selectedTikTokAccount}
+                selectedInstagramAccount={selectedInstagramAccount}
+                selectedPinterestAccount={selectedPinterestAccount}
+                selectedThreadsAccount={selectedThreadsAccount}
+                pinterestBoards={pinterestBoards}
+              />
             </TabsContent>
 
             <TabsContent value="posts" className="space-y-6">
-              <div className="grid gap-6">
-                {/* Facebook Posts */}
-                {isFacebookTokenSet && facebookPosts.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Facebook className="h-5 w-5 text-blue-600" />
-                      Facebook Posts
-                    </h3>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {facebookPosts.map((post) => (
-                        <Card key={post.id}>
-                          <CardContent className="p-4">
-                            {post.full_picture && (
-                              <img
-                                src={post.full_picture || "/placeholder.svg"}
-                                alt="Post"
-                                className="w-full h-48 object-cover rounded-lg mb-3"
-                              />
-                            )}
-                            <p className="text-sm text-gray-600 mb-2">{post.message || post.story || "No caption"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>👍 {post.likes?.summary?.total_count || 0}</span>
-                              <span>💬 {post.comments?.summary?.total_count || 0}</span>
-                              <span>🔄 {post.shares?.count || 0}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(post.created_time).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Instagram Posts */}
-                {isInstagramTokenSet && instagramPosts.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Instagram className="h-5 w-5 text-pink-600" />
-                      Instagram Posts
-                    </h3>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {instagramPosts.map((post) => (
-                        <Card key={post.id}>
-                          <CardContent className="p-4">
-                            {(post.media_url || post.thumbnail_url) && (
-                              <img
-                                src={post.media_url || post.thumbnail_url}
-                                alt="Post"
-                                className="w-full h-48 object-cover rounded-lg mb-3"
-                              />
-                            )}
-                            <p className="text-sm text-gray-600 mb-2">{post.caption || "No caption"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>❤️ {post.like_count || 0}</span>
-                              <span>💬 {post.comments_count || 0}</span>
-                              <span className="capitalize">{post.media_type}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(post.timestamp).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Pinterest Pins */}
-                {isPinterestTokenSet && pinterestPins.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Share2 className="h-5 w-5 text-red-600" />
-                      Pinterest Pins
-                    </h3>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {pinterestPins.map((pin) => {
-                        // Helper to safely extract the image URL from the nested media object
-                        // Pinterest provides multiple sizes; we try 600x315 or 1200x first, then fallback to any available
-                        const imageUrl =
-                          pin.media?.images?.['600x315']?.url ||
-                          pin.media?.images?.['1200x']?.url ||
-                          (pin.media?.images ? Object.values(pin.media.images)[0]?.url : null);
-
-                        return (
-                          <Card key={pin.id}>
-                            <CardContent className="p-4">
-                              {imageUrl && (
-                                <img
-                                  src={imageUrl}
-                                  alt="Pin"
-                                  className="w-full h-48 object-cover rounded-lg mb-3"
-                                />
-                              )}
-                              <h4 className="font-medium mb-1">{pin.title || "No title"}</h4>
-                              <p className="text-sm text-gray-600 mb-2">{pin.description || "No description"}</p>
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>❤️ {pin.like_count || 0}</span>
-                                <span>💬 {pin.comment_count || 0}</span>
-                              </div>
-                              <p className="text-xs text-gray-400 mt-2">
-                                {new Date(pin.created_at).toLocaleDateString()}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Threads Posts */}
-                {isThreadsTokenSet && threadsPosts.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <MessageCircle className="h-5 w-5 text-black" />
-                      Threads Posts
-                    </h3>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {threadsPosts.map((post) => {
-                        // START OF FIX: Use case-insensitive includes for a more robust check
-                        const lowerCaseUrl = post.media_url?.toLowerCase() || '';
-                        const isVideo =
-                          lowerCaseUrl.includes('.mp4') ||
-                          lowerCaseUrl.includes('.mov') ||
-                          lowerCaseUrl.includes('.avi') ||
-                          lowerCaseUrl.includes('video'); // General check for 'video' in URL
-
-                        return (
-                          <Card key={post.id}>
-                            <CardContent className="p-4">
-                              {post.media_url && (
-                                isVideo ? (
-                                  <Video
-                                    src={post.media_url}
-                                    controls
-                                    // Add width/height for better video rendering on initial load
-                                    width="100%"
-                                    height="100%"
-                                    className="w-full h-48 object-contain rounded-lg mb-3" // Changed object-cover to object-contain for videos
-                                    aria-label="Threads video post"
-                                  />
-                                ) : (
-                                  <img
-                                    src={post.media_url}
-                                    alt="Post"
-                                    className="w-full h-48 object-cover rounded-lg mb-3"
-                                  />
-                                )
-                              )}
-                              <p className="text-sm text-gray-600 mb-2">{post.text || "No text"}</p>
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>❤️ {post.like_count || 0}</span>
-                                <span>💬 {post.reply_count || 0}</span>
-                              </div>
-                              <p className="text-xs text-gray-400 mt-2">
-                                {new Date(post.timestamp).toLocaleDateString()}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* TikTok Videos */}
-                {isTikTokTokenSet && tiktokVideos.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Music className="h-5 w-5 text-black" />
-                      TikTok Videos
-                    </h3>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {tiktokVideos.map((video) => (
-                        <Card key={video.id}>
-                          <CardContent className="p-4">
-                            <div className="relative w-full h-[325px] mb-3 bg-black rounded-lg overflow-hidden group">
-                              <a href={video.share_url || video.embed_link || "#"} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-                                <img
-                                  src={video.cover_image_url}
-                                  alt={video.title}
-                                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="bg-black/50 p-3 rounded-full group-hover:bg-black/70 transition-colors">
-                                    <Play className="h-8 w-8 text-white" fill="white" />
-                                  </div>
-                                </div>
-                                <div className="absolute bottom-2 right-2 text-white text-xs bg-black/50 px-2 py-1 rounded flex items-center gap-1">
-                                  <ExternalLink className="h-3 w-3" />
-                                  Watch on TikTok
-                                </div>
-                              </a>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2 line-clamp-2">{video.title || "No description"}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>❤️ {video.like_count || 0}</span>
-                              <span>💬 {video.comment_count || 0}</span>
-                              <span>👁️ {video.view_count || 0}</span>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              {new Date(video.create_time * 1000).toLocaleDateString()}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* No posts message */}
-                {(!isFacebookTokenSet || facebookPosts.length === 0) &&
-                  (!isInstagramTokenSet || instagramPosts.length === 0) &&
-                  (!isPinterestTokenSet || pinterestPins.length === 0) &&
-                  (!isThreadsTokenSet || threadsPosts.length === 0) &&
-                  (!isTikTokTokenSet || tiktokVideos.length === 0) && (
-                    <div className="text-center py-12">
-                      <p className="text-gray-500">No posts available. Connect your accounts to see posts.</p>
-                    </div>
-                  )}
-              </div>
+              <PostsTab
+                isFacebookTokenSet={isFacebookTokenSet}
+                isInstagramTokenSet={isInstagramTokenSet}
+                isPinterestTokenSet={isPinterestTokenSet}
+                isThreadsTokenSet={isThreadsTokenSet}
+                isTikTokTokenSet={isTikTokTokenSet}
+                facebookPosts={facebookPosts}
+                instagramPosts={instagramPosts}
+                pinterestPins={pinterestPins}
+                threadsPosts={threadsPosts}
+                tiktokVideos={tiktokVideos}
+              />
             </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+          </Tabs >
+        </div >
+      </div >
 
 
       <Dialog open={showTokenModal} onOpenChange={setShowTokenModal}>
@@ -4378,747 +3317,102 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showPostModal} onOpenChange={setShowPostModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Post</DialogTitle>
-            <DialogDescription>Share content across your social media platforms</DialogDescription>
-          </DialogHeader>
+      <CreatePostDialog
+        open={showPostModal}
+        onOpenChange={setShowPostModal}
+        postType={postType}
+        setPostType={setPostType}
+        postToFacebook={postToFacebook}
+        setPostToFacebook={setPostToFacebook}
+        postToInstagram={postToInstagram}
+        setPostToInstagram={setPostToInstagram}
+        postToPinterest={postToPinterest}
+        setPostToPinterest={setPostToPinterest}
+        postToThreads={postToThreads}
+        setPostToThreads={setPostToThreads}
+        postToTikTok={postToTikTok}
+        setPostToTikTok={setPostToTikTok}
+        isFacebookTokenSet={isFacebookTokenSet}
+        isInstagramTokenSet={isInstagramTokenSet}
+        isPinterestTokenSet={isPinterestTokenSet}
+        isThreadsTokenSet={isThreadsTokenSet}
+        isTikTokTokenSet={isTikTokTokenSet}
+        selectedFacebookPage={selectedFacebookPage}
+        selectedInstagramAccount={selectedInstagramAccount}
+        selectedPinterestAccount={selectedPinterestAccount}
+        selectedThreadsAccount={selectedThreadsAccount}
+        selectedTikTokAccount={selectedTikTokAccount}
+        postContent={postContent}
+        setPostContent={setPostContent}
+        handleCaptionChange={handleCaptionChange}
+        textareaRef={textareaRef}
+        selectedFiles={selectedFiles}
+        setSelectedFiles={setSelectedFiles}
+        filePreviews={filePreviews}
+        setFilePreviews={setFilePreviews}
+        handleFileSelect={handleFileSelect}
+        removeFile={removeFile}
+        fileInputRef={fileInputRef}
+        setFileTypes={setFileTypes}
+        isScheduled={isScheduled}
+        setIsScheduled={setIsScheduled}
+        scheduledDate={scheduledDate}
+        setScheduledDate={setScheduledDate}
+        scheduledTime={scheduledTime}
+        setScheduledTime={setScheduledTime}
+        pinTitle={pinTitle}
+        setPinTitle={setPinTitle}
+        pinDescription={pinDescription}
+        setPinDescription={setPinDescription}
+        pinLink={pinLink}
+        setPinLink={setPinLink}
+        pinterestBoards={pinterestBoards}
+        selectedPinterestBoard={selectedPinterestBoard}
+        handlePinterestBoardSelection={handlePinterestBoardSelection}
+        newBoardName={newBoardName}
+        setNewBoardName={setNewBoardName}
+        handleCreateBoard={handleCreateBoard}
+        isCreatingBoard={isCreatingBoard}
+        showMentionDropdown={showMentionDropdown}
+        mentionSuggestions={mentionSuggestions}
+        handleSelectMention={handleSelectMention}
+        isSearchingMentions={isSearchingMentions}
+        mentionSearchQuery={mentionSearchQuery}
+        showEmojiPicker={showEmojiPicker}
+        setShowEmojiPicker={setShowEmojiPicker}
+        handleEmojiClick={handleEmojiClick}
+        showHashtagPicker={showHashtagPicker}
+        setShowHashtagPicker={setShowHashtagPicker}
+        popularHashtags={popularHashtags}
+        handleHashtagClick={handleHashtagClick}
+        handlePost={handlePost}
+        postingStatus={postingStatus}
+        uploadProgress={uploadProgress}
+        error={error}
+      />
 
-          <div className="space-y-6">
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-
-            <div className="space-y-2">
-              <Label>Post Type</Label>
-              <div className="flex space-x-2 flex-wrap gap-2">
-                <Button
-                  variant={postType === "post" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setPostType("post")
-                    setSelectedFiles([])
-                    setFilePreviews([])
-                    setPostToPinterest(false)
-                  }}
-                >
-                  Regular Post
-                </Button>
-                <Button
-                  variant={postType === "reel" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setPostType("reel")
-                    setSelectedFiles([])
-                    setFilePreviews([])
-                    setPostToPinterest(false)
-                  }}
-                >
-                  Reel/Video
-                </Button>
-                <Button
-                  variant={postType === "carousel" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setPostType("carousel")
-                    setSelectedFiles([])
-                    setFilePreviews([])
-                    setPostToPinterest(false)
-                  }}
-                >
-                  Carousel
-                </Button>
-                <Button
-                  variant={postType === "pin" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setPostType("pin")
-                    setSelectedFiles([])
-                    setFilePreviews([])
-
-                    // Add these lines to auto-switch platforms
-                    setPostToFacebook(false)
-                    setPostToInstagram(false)
-                    setPostToThreads(false)
-                    setPostToPinterest(true)
-                  }}
-                >
-                  Pinterest Pin
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{getPostTypeHelperText()}</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Platform Selection</Label>
-              <div className="flex space-x-4 flex-wrap gap-2">
-                {postType !== "pin" && (
-                  <>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="facebook"
-                        checked={postToFacebook}
-                        // @ts-ignore
-                        onCheckedChange={setPostToFacebook}
-                        disabled={!selectedFacebookPage}
-                      />
-                      <Label htmlFor="facebook" className="flex items-center space-x-2">
-                        <Facebook className="h-4 w-4 text-blue-600" />
-                        <span>Facebook</span>
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="instagram"
-                        checked={postToInstagram}
-                        // @ts-ignore
-                        onCheckedChange={setPostToInstagram}
-                        disabled={!selectedInstagramAccount}
-                      />
-                      <Label htmlFor="instagram" className="flex items-center space-x-2">
-                        <Instagram className="h-4 w-4 text-pink-600" />
-                        <span>Instagram</span>
-                      </Label>
-                    </div>
-                  </>
-                )}
-                {postType === "pin" && (
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="pinterest"
-                      checked={postToPinterest}
-                      // @ts-ignore
-                      onCheckedChange={setPostToPinterest}
-                      disabled={!selectedPinterestAccount || !selectedPinterestBoard}
-                    />
-                    <Label htmlFor="pinterest" className="flex items-center space-x-2">
-                      <Share2 className="h-4 w-4 text-red-600" />
-                      <span>Pinterest</span>
-                    </Label>
-                  </div>
-                )}
-                {postType !== "pin" && (
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="threads"
-                      checked={postToThreads}
-                      // @ts-ignore
-                      onCheckedChange={setPostToThreads}
-                      disabled={!selectedThreadsAccount}
-                    />
-                    <Label htmlFor="threads" className="flex items-center space-x-2">
-                      <MessageCircle className="h-4 w-4 text-black" />
-                      <span>Threads</span>
-                    </Label>
-                  </div>
-                )}
-                {postType === "reel" && (
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="tiktok"
-                      checked={postToTikTok}
-                      // @ts-ignore
-                      onCheckedChange={setPostToTikTok}
-                      disabled={!selectedTikTokAccount}
-                    />
-                    <Label htmlFor="tiktok" className="flex items-center space-x-2">
-                      <Music className="h-4 w-4 text-black" />
-                      <span>TikTok</span>
-                    </Label>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Pinterest-specific fields */}
-            {postToPinterest && postType === "pin" && (
-              <div className="space-y-4 border rounded-lg p-4 bg-muted/50">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Share2 className="h-4 w-4 text-red-600" />
-                  Pinterest Pin Details
-                </h4>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pin-title">Pin Title *</Label>
-                  <Input
-                    id="pin-title"
-                    placeholder="Enter pin title..."
-                    value={pinTitle}
-                    onChange={(e) => setPinTitle(e.target.value)}
-                    maxLength={100}
-                  />
-                  <p className="text-xs text-muted-foreground">{pinTitle.length}/100 characters</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pin-description">Pin Description</Label>
-                  <Textarea
-                    id="pin-description"
-                    placeholder="Describe your pin..."
-                    value={pinDescription}
-                    onChange={(e) => setPinDescription(e.target.value)}
-                    maxLength={500}
-                  />
-                  <p className="text-xs text-muted-foreground">{pinDescription.length}/500 characters</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pin-link">Link (Optional)</Label>
-                  <Input
-                    id="pin-link"
-                    placeholder="https://example.com"
-                    value={pinLink}
-                    onChange={(e) => setPinLink(e.target.value)}
-                    type="url"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Select or Create Board</Label>
-
-                  {/* Board Selection Dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start mb-2">
-                        {selectedPinterestBoard ? selectedPinterestBoard.name : "Select a board..."}
-                        <ChevronDown className="ml-auto h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-full max-h-48 overflow-y-auto">
-                      {pinterestBoards.length === 0 ? (
-                        <div className="p-2 text-sm text-muted-foreground">No boards found. Create one below.</div>
-                      ) : (
-                        pinterestBoards.map((board) => (
-                          <DropdownMenuItem
-                            key={board.id}
-                            onClick={() => handlePinterestBoardSelection(board)}
-                          >
-                            {board.name}
-                            {selectedPinterestBoard?.id === board.id && (
-                              <Check className="ml-auto h-4 w-4" />
-                            )}
-                          </DropdownMenuItem>
-                        ))
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Create Board Input - Always Visible Now */}
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="New board name..."
-                      value={newBoardName}
-                      onChange={(e) => setNewBoardName(e.target.value)}
-                      className="h-9"
-                    />
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={handleCreateBoard}
-                      disabled={isCreatingBoard || !newBoardName.trim()}
-                    >
-                      {isCreatingBoard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      Create
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {postType !== "pin" && (
-              <div className="space-y-2">
-                <Label htmlFor="post-content">
-                  {postType === "reel" ? "Video Description" :
-                    postType === "pin" ? "Pin Description (optional)" :
-                      "Post Content"}
-                </Label>
-                <div className="relative">
-                  <Textarea
-                    ref={textareaRef}
-                    id="post-content"
-                    placeholder={
-                      postType === "reel"
-                        ? "Describe your reel... (Type @ to mention people)"
-                        : postType === "carousel"
-                          ? "Caption for your carousel... (Type @ to mention people)"
-                          : postType === "pin"
-                            ? "Additional description for your pin... (Type @ to mention people)"
-                            : "What's on your mind? (Type @ to mention people)"
-                    }
-                    value={postContent}
-                    onChange={handleCaptionChange}
-                    className="min-h-[120px] pr-20"
-                  />
-
-                  {showMentionDropdown && (
-                    <div className="absolute z-50 mt-1 w-64 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                      {isSearchingMentions ? (
-                        <div className="p-2 text-sm text-muted-foreground">Searching...</div>
-                      ) : mentionSuggestions.length > 0 ? (
-                        mentionSuggestions.map((person) => (
-                          <button
-                            key={person.id}
-                            className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex items-center gap-2"
-                            onClick={() => handleSelectMention(person)}
-                          >
-                            <Users className="h-4 w-4" />
-                            {person.name}
-                          </button>
-                        ))
-                      ) : mentionSearchQuery.length >= 2 ? (
-                        <div className="p-2 text-sm text-muted-foreground">No people found</div>
-                      ) : null}
-                    </div>
-                  )}
-
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <div className="relative">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setShowEmojiPicker(!showEmojiPicker)
-                          setShowHashtagPicker(false)
-                        }}
-                      >
-                        <Smile className="h-4 w-4" />
-                      </Button>
-                      {showEmojiPicker && (
-                        <div className="absolute top-8 right-0 z-50">
-                          <EmojiPicker onEmojiClick={handleEmojiClick} width={300} height={400} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="relative">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setShowHashtagPicker(!showHashtagPicker)
-                          setShowEmojiPicker(false)
-                        }}
-                      >
-                        <Hash className="h-4 w-4" />
-                      </Button>
-                      {showHashtagPicker && (
-                        <div className="absolute top-8 right-0 z-50 w-80 max-h-60 bg-white border rounded-lg shadow-lg overflow-hidden">
-                          <ScrollArea className="h-full">
-                            <div className="p-3">
-                              <h4 className="font-medium mb-2">Popular Hashtags</h4>
-                              <div className="flex flex-wrap gap-1">
-                                {popularHashtags.map((hashtag) => (
-                                  <Button
-                                    key={hashtag}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 text-xs bg-transparent"
-                                    onClick={() => handleHashtagClick(hashtag)}
-                                  >
-                                    {hashtag}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          </ScrollArea>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground mt-1">
-                  <span>
-                    {postContent.length}/
-                    {postToThreads ? "500" :
-                      postToInstagram ? "2,200" :
-                        "63,206"} characters
-                  </span>
-                  <span className="text-xs">
-                    {postToThreads && postContent.length > 500 && (
-                      <span className="text-red-500">Threads limit exceeded</span>
-                    )}
-                    {postToInstagram && postContent.length > 2200 && (
-                      <span className="text-red-500">Instagram limit exceeded</span>
-                    )}
-                    {postToFacebook && postContent.length > 63206 && (
-                      <span className="text-red-500">Facebook limit exceeded</span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="media-upload">
-                {postType === "reel"
-                  ? "Video (Required)"
-                  : postType === "carousel"
-                    ? "Images (2-10 required)"
-                    : postType === "pin"
-                      ? "Image (Required)"
-                      : "Media (Optional)"}
-              </Label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  ref={fileInputRef}
-                  id="media-upload"
-                  type="file"
-                  accept={postType === "reel" ? "video/*" :
-                    postType === "carousel" ? "image/*" :
-                      postType === "pin" ? "image/*" :
-                        "image/*,video/*"}
-                  multiple={postType === "carousel"}
-                  onChange={handleFileSelect}
-                  className="flex-1"
-                />
-                {selectedFiles.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedFiles([])
-                      setFilePreviews([])
-                      setFileTypes([])
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {postType === "carousel"
-                  ? "You can select multiple images (2-10) by holding Ctrl/Cmd and clicking, or by dragging and dropping"
-                  : postType === "reel"
-                    ? "Select one video file"
-                    : postType === "pin"
-                      ? "Select one image file for your pin"
-                      : "Select one image or video file"}
-              </p>
-
-              {filePreviews.length > 0 && (
-                <div className="mt-2">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {filePreviews.map((preview, index) => (
-                      <div key={index} className="relative">
-                        {selectedFiles[index]?.type.startsWith("video/") ? (
-                          <video src={preview} className="h-24 w-full object-cover rounded border" controls />
-                        ) : (
-                          <Image
-                            src={preview || "/placeholder.svg"}
-                            alt={`Preview ${index + 1}`}
-                            width={100}
-                            height={100}
-                            className="h-24 w-full object-cover rounded border"
-                          />
-                        )}
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-1 right-1 h-6 w-6 p-0"
-                          onClick={() => removeFile(index)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
-                    {postType === "carousel" && ` (${selectedFiles.length}/10)`}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {(postToFacebook || postToInstagram || postToPinterest || postToThreads || postToTikTok) && (
-              <>
-                <div className="flex items-center space-x-2">
-                  {/* @ts-ignore */}
-                  <Checkbox id="schedule" checked={isScheduled} onCheckedChange={setIsScheduled} />
-                  <Label htmlFor="schedule">Schedule for later</Label>
-                </div>
-
-                {isScheduled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="scheduled-date">Date</Label>
-                      <Input
-                        id="scheduled-date"
-                        type="date"
-                        value={scheduledDate}
-                        onChange={(e) => setScheduledDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="scheduled-time">Time</Label>
-                      <Input
-                        id="scheduled-time"
-                        type="time"
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-            {/* 
-            {(postToInstagram || postToPinterest || postToThreads) && isScheduled && (
-              <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
-                Only Facebook supports scheduled posts. Uncheck other platforms to schedule to Facebook only.
-              </div>
-            )} */}
-
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowPostModal(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handlePost}
-                disabled={postingStatus.isPosting || uploadProgress.isUploading}
-              >
-                {postingStatus.isPosting || uploadProgress.isUploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {uploadProgress.isUploading ? 'Uploading...' : 'Posting...'}
-                  </>
-                ) : isScheduled ? (
-                  <>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Schedule {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : postType === "pin" ? "Pin" : "Post"}
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Post {postType === "reel" ? "Reel" : postType === "carousel" ? "Carousel" : postType === "pin" ? "Pin" : "Now"}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showPageModal} onOpenChange={setShowPageModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Select Your Accounts</DialogTitle>
-            <DialogDescription>Choose which accounts to use for posting and analytics.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 max-h-[60vh] overflow-y-auto">
-            {facebookPages.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                  <Facebook className="h-5 w-5 text-blue-600" />
-                  Facebook Pages
-                </Label>
-                <div className="grid gap-2">
-                  {facebookPages.map((page) => (
-                    <Button
-                      key={page.id}
-                      variant={selectedFacebookPage?.id === page.id ? "default" : "outline"}
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => handlePageSelection(page)}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        {page.picture?.data?.url && (
-                          <Image
-                            src={page.picture.data.url || "/placeholder.svg"}
-                            alt={page.name}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">{page.name}</div>
-                        </div>
-                        {selectedFacebookPage?.id === page.id && (
-                          <Check className="h-5 w-5 text-green-600" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {instagramAccounts.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                  <Instagram className="h-5 w-5 text-pink-600" />
-                  Instagram Accounts
-                </Label>
-                <div className="grid gap-2">
-                  {instagramAccounts.map((account) => (
-                    <Button
-                      key={account.id}
-                      variant={selectedInstagramAccount?.id === account.id ? "default" : "outline"}
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => handleInstagramSelection(account)}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        {account.profile_picture_url && (
-                          <Image
-                            src={account.profile_picture_url || "/placeholder.svg"}
-                            alt={account.username}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">@{account.username}</div>
-                          <div className="text-sm text-muted-foreground">{account.name}</div>
-                        </div>
-                        {selectedInstagramAccount?.id === account.id && (
-                          <Check className="h-5 w-5 text-green-600" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {pinterestAccounts.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                  <Share2 className="h-5 w-5 text-red-600" />
-                  Pinterest Accounts
-                </Label>
-                <div className="grid gap-2">
-                  {pinterestAccounts.map((account) => (
-                    <Button
-                      key={account.id}
-                      variant={selectedPinterestAccount?.id === account.id ? "default" : "outline"}
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => handlePinterestSelection(account)}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        {account.profile_picture && (
-                          <Image
-                            src={account.profile_picture || "/placeholder.svg"}
-                            alt={account.username}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">@{account.username}</div>
-                          <div className="text-sm text-muted-foreground">{account.full_name}</div>
-                        </div>
-                        {selectedPinterestAccount?.id === account.id && (
-                          <Check className="h-5 w-5 text-green-600" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-
-                {selectedPinterestAccount && pinterestBoards.length > 0 && (
-                  <div className="space-y-2 mt-4">
-                    <Label className="text-sm">Select Board for Pins</Label>
-                    <div className="grid gap-2">
-                      {pinterestBoards.map((board) => (
-                        <Button
-                          key={board.id}
-                          variant={selectedPinterestBoard?.id === board.id ? "default" : "outline"}
-                          size="sm"
-                          className="w-full justify-start"
-                          onClick={() => handlePinterestBoardSelection(board)}
-                        >
-                          {board.name}
-                          {selectedPinterestBoard?.id === board.id && (
-                            <Check className="ml-auto h-4 w-4" />
-                          )}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {threadsAccounts.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                  <MessageCircle className="h-5 w-5 text-black" />
-                  Threads Accounts
-                </Label>
-                <div className="grid gap-2">
-                  {threadsAccounts.map((account) => (
-                    <Button
-                      key={account.id}
-                      variant={selectedThreadsAccount?.id === account.id ? "default" : "outline"}
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => handleThreadsSelection(account)}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        {account.profile_picture_url && (
-                          <Image
-                            src={account.profile_picture_url || "/placeholder.svg"}
-                            alt={account.username}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">@{account.username}</div>
-                          <div className="text-sm text-muted-foreground">{account.name}</div>
-                        </div>
-                        {selectedThreadsAccount?.id === account.id && (
-                          <Check className="h-5 w-5 text-green-600" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {tiktokAccounts.length > 0 && (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                  <Music className="h-5 w-5 text-black" />
-                  TikTok Accounts
-                </Label>
-                <div className="grid gap-2">
-                  {tiktokAccounts.map((account) => (
-                    <Button
-                      key={account.open_id}
-                      variant={selectedTikTokAccount?.open_id === account.open_id ? "default" : "outline"}
-                      className="w-full justify-start h-auto py-3"
-                      onClick={() => handleTikTokSelection(account)}
-                    >
-                      <div className="flex items-center gap-3 w-full">
-                        {account.avatar_url && (
-                          <Image
-                            src={account.avatar_url || "/placeholder.svg"}
-                            alt={account.display_name}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <div className="flex-1 text-left">
-                          <div className="font-medium">{account.display_name}</div>
-                        </div>
-                        {selectedTikTokAccount?.open_id === account.open_id && (
-                          <Check className="h-5 w-5 text-green-600" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PageSelectionDialog
+        open={showPageModal}
+        onOpenChange={setShowPageModal}
+        facebookPages={facebookPages}
+        instagramAccounts={instagramAccounts}
+        pinterestAccounts={pinterestAccounts}
+        threadsAccounts={threadsAccounts}
+        tiktokAccounts={tiktokAccounts}
+        selectedFacebookPage={selectedFacebookPage}
+        selectedInstagramAccount={selectedInstagramAccount}
+        selectedPinterestAccount={selectedPinterestAccount}
+        selectedThreadsAccount={selectedThreadsAccount}
+        selectedTikTokAccount={selectedTikTokAccount}
+        onSelectFacebookPage={handlePageSelection}
+        onSelectInstagramAccount={handleInstagramSelection}
+        onSelectPinterestAccount={handlePinterestSelection}
+        onSelectThreadsAccount={handleThreadsSelection}
+        onSelectTikTokAccount={handleTikTokSelection}
+        pinterestBoards={pinterestBoards}
+        selectedPinterestBoard={selectedPinterestBoard}
+        onSelectPinterestBoard={handlePinterestBoardSelection}
+      />
     </div >
   )
 }
