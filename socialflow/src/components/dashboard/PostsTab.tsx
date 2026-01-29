@@ -82,13 +82,22 @@ export function PostsTab({
                             <Card key={post.id}>
                                 <CardContent className="p-4">
                                     {(post.media_url || post.thumbnail_url) && (
-                                        <img
-                                            src={post.media_url || post.thumbnail_url}
-                                            alt="Post"
-                                            className="w-full h-48 object-cover rounded-lg mb-3"
-                                        />
+                                        post.media_type === "VIDEO" ? (
+                                            <Video
+                                                src={post.media_url || ""}
+                                                poster={post.thumbnail_url}
+                                                controls
+                                                className="w-full h-48 object-contain rounded-lg mb-3 bg-black"
+                                            />
+                                        ) : (
+                                            <img
+                                                src={post.media_url || post.thumbnail_url}
+                                                alt="Post"
+                                                className="w-full h-48 object-cover rounded-lg mb-3"
+                                            />
+                                        )
                                     )}
-                                    <p className="text-sm text-gray-600 mb-2">{post.caption || "No caption"}</p>
+                                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">{post.caption || "No caption"}</p>
                                     <div className="flex justify-between text-xs text-gray-500">
                                         <span>❤️ {post.like_count || 0}</span>
                                         <span>💬 {post.comments_count || 0}</span>

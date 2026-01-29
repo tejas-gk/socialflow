@@ -16,6 +16,7 @@ export interface InstagramAccount {
     profile_picture_url?: string
     followers_count?: number
     media_count?: number
+    access_token?: string
 }
 
 export interface PinterestBoard {
@@ -31,6 +32,7 @@ export interface PinterestAccount {
     full_name?: string
     profile_picture?: string
     board_count?: number
+    access_token?: string
 }
 
 export interface ThreadsAccount {
@@ -39,7 +41,9 @@ export interface ThreadsAccount {
     name: string
     profile_picture_url?: string
     followers_count?: number
+    access_token?: string
 }
+
 
 export interface FacebookPost {
     id: string
